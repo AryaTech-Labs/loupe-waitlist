@@ -27,7 +27,7 @@ test.beforeEach(async ({ page }) => {
 test("the phone layout: dial, wordmark, form, nothing wider than the screen", async ({ page }) => {
   const problems = [];
   page.on("console", (m) => m.type() === "error" && problems.push(m.text()));
-  await page.goto("/");
+  await page.goto("./");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Loupe");
   await expect(page.getByText("Any watch welcome. Every watch celebrated.")).toBeVisible();
   await expect(byTestId(page, "waitlist.dial")).toBeVisible();
@@ -56,7 +56,7 @@ test("the phone layout: dial, wordmark, form, nothing wider than the screen", as
 
 test("joining sends one insert, lowercased, and shows You're on the list", async ({ page }) => {
   const requests = await answerInsert(page, 201);
-  await page.goto("/");
+  await page.goto("./");
   await page.getByLabel("Email").fill("  Collector@Example.com ");
   await page.getByLabel(/What do you collect\?/).fill("Vintage divers");
   await byTestId(page, "waitlist.submit").click();
@@ -73,7 +73,7 @@ test("joining sends one insert, lowercased, and shows You're on the list", async
 
 test("an email already on the list is a success, not an error", async ({ page }) => {
   await answerInsert(page, 409);
-  await page.goto("/");
+  await page.goto("./");
   await page.getByLabel("Email").fill("again@example.com");
   await byTestId(page, "waitlist.submit").click();
   await expect(byTestId(page, "waitlist.joined")).toBeVisible();
@@ -82,7 +82,7 @@ test("an email already on the list is a success, not an error", async ({ page })
 
 test("a server error keeps the form, says so, and lets them try again", async ({ page }) => {
   await answerInsert(page, 500);
-  await page.goto("/");
+  await page.goto("./");
   await page.getByLabel("Email").fill("someone@example.com");
   await byTestId(page, "waitlist.submit").click();
   await expect(byTestId(page, "waitlist.error")).toHaveText("Couldn't join the list. Please try again.");
@@ -93,7 +93,7 @@ test("a server error keeps the form, says so, and lets them try again", async ({
 
 test("a bad email is caught before anything is sent", async ({ page }) => {
   const requests = await answerInsert(page, 201);
-  await page.goto("/");
+  await page.goto("./");
   await byTestId(page, "waitlist.submit").click();
   await expect(byTestId(page, "waitlist.error")).toHaveText("Enter a valid email address.");
   await expect(page.getByLabel("Email")).toHaveAttribute("aria-invalid", "true");
@@ -105,7 +105,7 @@ test("a bad email is caught before anything is sent", async ({ page }) => {
 
 test("a bot that fills the hidden field sees success and sends nothing", async ({ page }) => {
   const requests = await answerInsert(page, 201);
-  await page.goto("/");
+  await page.goto("./");
   await page.getByLabel("Email").fill("bot@example.com");
   await page.locator("#website").fill("https://spam.example", { force: true });
   await byTestId(page, "waitlist.submit").click();
@@ -114,7 +114,7 @@ test("a bot that fills the hidden field sees success and sends nothing", async (
 });
 
 test("the copy never shows a beta date", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("./");
   const text = await page.locator("body").innerText();
   expect(text).not.toMatch(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/i);
   expect(text).not.toMatch(/\b\d{1,2}\/\d{1,2}\b|\bQ[1-4]\b/);
@@ -123,7 +123,7 @@ test("the copy never shows a beta date", async ({ page }) => {
 test.describe("dark mode", () => {
   test.use({ colorScheme: "dark" });
   test("takes the dark tokens", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("./");
     const colors = await page.evaluate(() => ({
       body: getComputedStyle(document.body).backgroundColor,
       card: getComputedStyle(document.querySelector(".card")).backgroundColor,

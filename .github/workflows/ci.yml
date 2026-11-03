@@ -55,6 +55,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     concurrency:
       group: pages
       cancel-in-progress: false
@@ -66,3 +68,29 @@ jobs:
           path: src
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  live:
+    name: Live check
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit chromium
+      # The same phone tests, against what Pages is now serving. Supabase is
+      # answered in the browser, so this never writes to the waitlist.
+      - name: Browser tests against the live site
+        run: npm run test:e2e
+        env:
+          SITE_URL: ${{ needs.deploy.outputs.page_url }}
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-traces
+          path: test-results/
+          retention-days: 7
