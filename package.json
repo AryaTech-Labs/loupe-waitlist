@@ -1,0 +1,16 @@
+{
+  "name": "loupe-waitlist",
+  "private": true,
+  "description": "Loupe closed-beta waitlist page (LOU-80). Static; deployed with GitHub Pages.",
+  "type": "module",
+  "scripts": {
+    "serve": "node scripts/serve.mjs",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "check": "node scripts/check.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "vitest": "4.1.12"
+  }
+}

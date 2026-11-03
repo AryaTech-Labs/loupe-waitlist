@@ -1,0 +1,41 @@
+# Loupe — beta waitlist
+
+The one-page teaser for the Loupe closed beta ([LOU-80](https://linear.app/arya-tech/issue/LOU-80/beta-waitlist-landing-page)). People leave an email, and optionally what they collect. Nothing else.
+
+**Live:** https://aryatech-labs.github.io/loupe-waitlist/ (loupe.com later, if we get it)
+
+This repo is temporary on purpose. When the beta waitlist closes, unpublish Pages (Settings → Pages) and archive or delete the repo; the main app (`AryaTech-Labs/loupe-web`) doesn't depend on it.
+
+## How it works
+
+- Plain HTML, CSS and JavaScript in `src/`. No framework and no build step; GitHub Pages serves `src/` as is.
+- The form inserts one row into the Supabase `waitlist` table with the **anon key** (`src/config.js`). The anon key is public by design; Row Level Security limits it to INSERT on that table, and nobody can read the list from the browser. The request asks for no row back (`Prefer: return=minimal`).
+- Emails are trimmed and lowercased. An email already on the list (HTTP 409) shows the same success, "You're on the list."
+- A hidden field catches form-filling bots: if it's filled, the page shows success and sends nothing.
+- No beta date anywhere in the copy; `npm run check` fails the build if one appears.
+- The dial and the Côtes de Genève background are the app's Welcome artwork, vendored from loupe-web (`src/vendor/`). Colours, type (Geist, self-hosted) and spacing are the app's design tokens, light and dark.
+- A Content-Security-Policy allows only this site's own files plus the one Supabase origin.
+
+## Develop
+
+```sh
+npm ci
+npm run serve        # http://localhost:4173
+npm run check        # anon key only, CSP matches config, no beta date
+npm test             # unit tests (Vitest)
+npx playwright install webkit chromium
+npm run test:e2e     # iPhone (WebKit) + Android (Chromium) browser tests
+```
+
+The browser tests answer Supabase inside the browser, so they never write to the real waitlist.
+
+## Deploy
+
+Every push to `main` runs CI. If the tests pass, the **Deploy to GitHub Pages** job publishes `src/`. Pull requests run the tests only.
+
+**Custom domain:** add the domain under Settings → Pages, point DNS at GitHub Pages, then update the `og:image` URL in `src/index.html`.
+
+## Rules
+
+- Never put the service role key in `src/config.js`. CI rejects any key whose role isn't `anon`.
+- The `waitlist` table, its RLS policy and any constraints belong to the server track (Hoover). This repo never changes the database.

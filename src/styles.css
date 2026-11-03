@@ -1,0 +1,309 @@
+/*
+ * Direction C — Modern Collector, the app's design system. Values copied from
+ * loupe-web src/app/globals.css (which mirrors iOS exactly). Flat surfaces,
+ * 1px hairlines, no shadows; accent only on the call to action.
+ */
+@font-face {
+  font-family: "Geist";
+  src: url("fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --was-background: #f2f3f5;
+  --was-surface: #ffffff;
+  --was-elevated: #e6e8ec;
+  --was-hairline: #e6e8ec;
+  --was-primary-text: #15181d;
+  --was-secondary-text: #5a6170;
+  --was-accent: #2f5d8a;
+  --was-on-accent: #ffffff;
+  --was-success: #1e7f4f;
+  --was-error: #b42318;
+  --was-finish-highlight: #ffffff;
+  --was-finish-shadow: #dbdde1;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-xxl: 48px;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-pill: 100px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --was-background: #101216;
+    --was-surface: #181b21;
+    --was-elevated: #22262e;
+    --was-hairline: #22262e;
+    --was-primary-text: #eceef2;
+    --was-secondary-text: #98a0ae;
+    --was-accent: #6fa3d9;
+    --was-on-accent: #101216;
+    --was-success: #5cc98a;
+    --was-error: #f07a72;
+    --was-finish-highlight: #33363c;
+    --was-finish-shadow: #08090b;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--was-background);
+  color: var(--was-primary-text);
+  font-family: "Geist", system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+.stripes {
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: max(var(--space-xl), env(safe-area-inset-top)) max(var(--space-md), env(safe-area-inset-right))
+    max(var(--space-lg), env(safe-area-inset-bottom)) max(var(--space-md), env(safe-area-inset-left));
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  max-width: 24rem;
+  text-align: center;
+}
+
+.dial {
+  width: 152px;
+  height: 152px;
+  margin-bottom: var(--space-xs);
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--was-secondary-text);
+}
+
+.wordmark {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.tagline {
+  margin: 0;
+  color: var(--was-secondary-text);
+}
+
+.pitch {
+  margin: var(--space-sm) 0 0;
+  font-size: 15px;
+  color: var(--was-secondary-text);
+}
+
+.card {
+  width: 100%;
+  max-width: 24rem;
+  padding: var(--space-lg);
+  background: var(--was-surface);
+  border: 1px solid var(--was-hairline);
+  border-radius: var(--radius-md);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--was-secondary-text);
+}
+
+.optional {
+  font-weight: 500;
+}
+
+input {
+  min-height: 44px;
+  padding: 0 var(--space-md);
+  /* 16px keeps iOS Safari from zooming into the field. */
+  font: inherit;
+  font-size: 16px;
+  color: var(--was-primary-text);
+  background: var(--was-background);
+  border: 1px solid var(--was-hairline);
+  border-radius: var(--radius-sm);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input::placeholder {
+  color: var(--was-secondary-text);
+  opacity: 1;
+}
+
+input:focus {
+  border-color: var(--was-accent);
+}
+
+input[aria-invalid="true"] {
+  border-color: var(--was-error);
+}
+
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.error {
+  margin: 0;
+  font-size: 15px;
+  color: var(--was-error);
+}
+
+.primary {
+  min-height: 48px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--was-on-accent);
+  background: var(--was-accent);
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.primary:focus-visible,
+.joined:focus-visible {
+  outline: 2px solid var(--was-accent);
+  outline-offset: 2px;
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.fineprint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--was-secondary-text);
+  text-align: center;
+}
+
+.joined {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  text-align: center;
+  outline: none;
+}
+
+.joined[hidden],
+form[hidden],
+.error[hidden] {
+  display: none;
+}
+
+.joined-icon {
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--space-sm);
+  fill: none;
+  stroke: var(--was-success);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.joined-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.joined-body {
+  margin: 0;
+  font-size: 15px;
+  color: var(--was-secondary-text);
+}
+
+.footer {
+  margin-top: auto;
+  font-size: 12px;
+  color: var(--was-secondary-text);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .page {
+    justify-content: center;
+    gap: var(--space-xl);
+  }
+  .dial {
+    width: 240px;
+    height: 240px;
+  }
+}
