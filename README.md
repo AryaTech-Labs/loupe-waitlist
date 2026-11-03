@@ -27,11 +27,15 @@ npx playwright install webkit chromium
 npm run test:e2e     # iPhone (WebKit) + Android (Chromium) browser tests
 ```
 
-The browser tests answer Supabase inside the browser, so they never write to the real waitlist.
+The browser tests answer Supabase inside the browser, so they never write to the real waitlist. To run them against the live site instead of a local server:
+
+```sh
+SITE_URL=https://aryatech-labs.github.io/loupe-waitlist/ npm run test:e2e
+```
 
 ## Deploy
 
-Every push to `main` runs CI. If the tests pass, the **Deploy to GitHub Pages** job publishes `src/`. Pull requests run the tests only.
+Every push to `main` runs CI. If the tests pass, the **Deploy to GitHub Pages** job publishes `src/`, then **Live check** runs the phone tests against the published site. Pull requests run the tests only.
 
 **Custom domain:** add the domain under Settings → Pages, point DNS at GitHub Pages, then update the `og:image` URL in `src/index.html`.
 
