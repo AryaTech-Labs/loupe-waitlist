@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { KEYBOARD_MIN, MARGIN, keyboardHeight, scrollDelta } from "../src/keyboard.js";
 
+// dial.js imports the canvas drawing code, which only touches the DOM when called.
+const { stripesHeight } = await import("../src/dial.js");
+
+describe("stripesHeight", () => {
+  it("is tall enough for the page plus the keyboard's room, on the screen's longest side", () => {
+    expect(stripesHeight(664, 390, 844)).toBe(Math.ceil(844 * 1.6));
+    expect(stripesHeight(340, 844, 390)).toBe(Math.ceil(844 * 1.6));
+  });
+  it("doesn't depend on the current visible height once the screen is taller", () => {
+    expect(stripesHeight(600, 390, 844)).toBe(stripesHeight(700, 390, 844));
+  });
+});
+
 describe("keyboardHeight", () => {
   it("is the height the keyboard took", () => {
     expect(keyboardHeight(664, 330)).toBe(334);

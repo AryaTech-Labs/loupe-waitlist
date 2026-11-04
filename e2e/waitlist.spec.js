@@ -204,6 +204,42 @@ test("with the keyboard up, the field being typed in and Join stay above it", as
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 });
 
+test("the background moves with the form as one piece and never redraws for a height change", async ({ page }) => {
+  await fakeKeyboard(page);
+  await page.goto("./");
+  const stripes = byTestId(page, "waitlist.stripes");
+  // A fingerprint of the drawing: its size and a column of pixels.
+  const fingerprint = () =>
+    stripes.evaluate((c) => {
+      const ctx = c.getContext("2d");
+      const column = Array.from(ctx.getImageData(Math.floor(c.width / 2), 0, 1, Math.min(c.height, 600)).data);
+      return `${c.width}x${c.height}:${column.join(",")}`;
+    });
+  // Where the stripes sit relative to the form; constant if they move together.
+  const offset = () =>
+    page.evaluate(
+      () =>
+        document.querySelector("[data-testid='waitlist.stripes']").getBoundingClientRect().top -
+        document.querySelector("[data-testid='waitlist.form']").getBoundingClientRect().top,
+    );
+  await expect.poll(fingerprint).not.toMatch(/^0x0/);
+  const before = await fingerprint();
+
+  // Safari's bars hiding as the keyboard opens: the height changes, the width doesn't.
+  const { width, height } = page.viewportSize();
+  await page.setViewportSize({ width, height: height + 80 });
+  await page.waitForTimeout(150);
+  expect(await fingerprint()).toBe(before);
+
+  // (A test browser's svh follows the window, so measure after the resize.)
+  const together = await offset();
+  await page.getByLabel("Email").click();
+  await page.evaluate((px) => window.__setKeyboard(px), KEYBOARD);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  expect(await offset()).toBe(together);
+  expect(await fingerprint()).toBe(before);
+});
+
 test("with the keyboard up, Join still submits", async ({ page }) => {
   await fakeKeyboard(page);
   await answerInsert(page, 201);
