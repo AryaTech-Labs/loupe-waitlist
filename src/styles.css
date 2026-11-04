@@ -315,10 +315,18 @@ form[hidden],
   white-space: nowrap;
 }
 
-/* Short phones (an SE with Safari's bars showing): drop the pitch. */
+/* Short phones (an SE with Safari's bars showing): drop the pitch, and leave
+   room for the tagline to wrap where a browser sets the type a little wider. */
 @media (max-height: 600px) {
   .pitch {
     display: none;
+  }
+  .page {
+    gap: var(--space-sm);
+  }
+  .dial {
+    width: clamp(64px, 12svh, 200px);
+    height: clamp(64px, 12svh, 200px);
   }
 }
 
