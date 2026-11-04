@@ -120,6 +120,101 @@ test("the copy never shows a beta date", async ({ page }) => {
   expect(text).not.toMatch(/\b\d{1,2}\/\d{1,2}\b|\bQ[1-4]\b/);
 });
 
+// The page is exactly one screen on phones: nothing to scroll, nothing to drag.
+// Visible areas with the browser's bars showing, small to large.
+const SCREENS = [
+  { name: "iPhone SE", width: 375, height: 548 },
+  { name: "iPhone 14", width: 390, height: 664 },
+  { name: "iPhone 15 Pro Max", width: 430, height: 740 },
+  { name: "Pixel 7", width: 412, height: 839 },
+];
+
+for (const screen of SCREENS) {
+  test(`fits one screen with nothing to scroll: ${screen.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: screen.width, height: screen.height });
+    await page.goto("./");
+    const fits = () => page.evaluate(() => document.scrollingElement.scrollHeight - window.innerHeight);
+    expect(await fits()).toBeLessThanOrEqual(0);
+    await expect(byTestId(page, "waitlist.submit")).toBeInViewport({ ratio: 1 });
+    // No rubber-band bounce (where the browser supports turning it off; Safari 16+ and Chrome do).
+    const overscroll = await page.evaluate(() =>
+      CSS.supports("overscroll-behavior", "none") ? getComputedStyle(document.documentElement).overscrollBehaviorY : "none",
+    );
+    expect(overscroll).toBe("none");
+    // An error takes the fine print's place, so it still fits.
+    await byTestId(page, "waitlist.submit").click();
+    await expect(byTestId(page, "waitlist.error")).toBeVisible();
+    expect(await fits()).toBeLessThanOrEqual(0);
+  });
+}
+
+// Browsers in tests have no on-screen keyboard, so this stands one in: it
+// shrinks visualViewport the way Safari and Chrome do when the keyboard opens.
+async function fakeKeyboard(page) {
+  await page.addInitScript(() => {
+    const viewport = new EventTarget();
+    let keyboard = 0;
+    Object.defineProperties(viewport, {
+      height: { get: () => window.innerHeight - keyboard },
+      width: { get: () => window.innerWidth },
+      offsetTop: { get: () => 0 },
+    });
+    Object.defineProperty(window, "visualViewport", { configurable: true, get: () => viewport });
+    window.__setKeyboard = (px) => {
+      keyboard = px;
+      viewport.dispatchEvent(new Event("resize"));
+    };
+  });
+}
+
+const KEYBOARD = 336; // an iPhone keyboard with its suggestion bar
+
+/** Where an element is against the part of the screen the keyboard leaves. */
+const visible = (locator) =>
+  locator.evaluate((el, keyboard) => {
+    const r = el.getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= window.innerHeight - keyboard;
+  }, KEYBOARD);
+
+test("with the keyboard up, the field being typed in and Join stay above it", async ({ page }) => {
+  await fakeKeyboard(page);
+  await page.goto("./");
+  const email = page.getByLabel("Email");
+  const collects = page.getByLabel(/What do you collect\?/);
+  const submit = byTestId(page, "waitlist.submit");
+
+  await email.click();
+  await page.evaluate((px) => window.__setKeyboard(px), KEYBOARD);
+  await expect(page.locator(".page")).toHaveClass(/keyboard-open/);
+  await expect.poll(() => visible(email)).toBe(true);
+  await expect.poll(() => visible(submit)).toBe(true);
+  await email.pressSequentially("collector@example.com");
+  await expect.poll(() => visible(email)).toBe(true);
+
+  // Moving to the next field keeps that one in view too.
+  await collects.click();
+  await expect.poll(() => visible(collects)).toBe(true);
+  await expect.poll(() => visible(submit)).toBe(true);
+
+  // Keyboard down: one screen again, back at the top.
+  await page.evaluate(() => document.activeElement.blur());
+  await page.evaluate(() => window.__setKeyboard(0));
+  await expect(page.locator(".page")).not.toHaveClass(/keyboard-open/);
+  await expect.poll(() => page.evaluate(() => document.scrollingElement.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test("with the keyboard up, Join still submits", async ({ page }) => {
+  await fakeKeyboard(page);
+  await answerInsert(page, 201);
+  await page.goto("./");
+  await page.getByLabel("Email").click();
+  await page.evaluate((px) => window.__setKeyboard(px), KEYBOARD);
+  await page.getByLabel("Email").fill("collector@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toBeVisible();
+});
+
 test.describe("dark mode", () => {
   test.use({ colorScheme: "dark" });
   test("takes the dark tokens", async ({ page }) => {

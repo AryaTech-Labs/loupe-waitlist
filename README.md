@@ -14,6 +14,7 @@ This repo is temporary on purpose. When the beta waitlist closes, unpublish Page
 - A hidden field catches form-filling bots: if it's filled, the page shows success and sends nothing.
 - No beta date anywhere in the copy; `npm run check` fails the build if one appears.
 - The dial and the Côtes de Genève background are the app's Welcome artwork, vendored from loupe-web (`src/vendor/`). Colours, type (Geist, self-hosted) and spacing are the app's design tokens, light and dark.
+- On phones the page is exactly one screen: no scrolling, no rubber-band bounce. The dial scales with the screen's height, and very short screens drop the description line. While the keyboard is up, `src/keyboard.js` makes room below the form and scrolls the field being typed in, plus the Join button, to just above the keyboard.
 - A Content-Security-Policy allows only this site's own files plus the one Supabase origin.
 
 ## Develop
