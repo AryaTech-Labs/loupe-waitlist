@@ -66,6 +66,8 @@ export function startDial(canvas) {
     draw();
   });
   window.addEventListener("resize", () => {
+    // The dial is sized by svh, so browser bars moving don't change it.
+    if ((canvas.getBoundingClientRect().width || 200) === size) return;
     resize();
     draw();
   });
@@ -74,8 +76,21 @@ export function startDial(canvas) {
   moreContrast.addEventListener("change", draw);
 }
 
+/**
+ * The stripes' height, fixed for the life of the page. They're drawn rotated
+ * about the canvas centre, so a redraw at a new height (Safari's bars hiding
+ * when the keyboard opens) would visibly slide them; one tall drawing, clipped
+ * by its .backdrop, covers the page and the keyboard's extra room without ever
+ * redrawing.
+ */
+export function stripesHeight(innerHeight, screenWidth, screenHeight) {
+  return Math.ceil(Math.max(innerHeight, screenWidth, screenHeight) * 1.6);
+}
+
 export function startStripes(canvas) {
   let frame = 0;
+  let drawnWidth = 0;
+  const height = stripesHeight(window.innerHeight, window.screen.width, window.screen.height);
   const render = () => {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
@@ -83,16 +98,19 @@ export function startStripes(canvas) {
       if (!ctx) return;
       const dpr = window.devicePixelRatio || 1;
       const w = window.innerWidth;
-      const h = window.innerHeight;
+      drawnWidth = w;
       canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
+      canvas.height = Math.round(height * dpr);
       canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
+      canvas.style.height = `${height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawGenevaStripes(ctx, w, h, tokens());
+      drawGenevaStripes(ctx, w, height, tokens());
     });
   };
   render();
-  window.addEventListener("resize", render);
+  // Only a new width (rotation) redraws; height changes never do.
+  window.addEventListener("resize", () => {
+    if (window.innerWidth !== drawnWidth) render();
+  });
   onSchemeChange(render);
 }

@@ -86,11 +86,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.stripes {
-  position: fixed;
-  inset: 0 auto auto 0;
+/* The stripes belong to the page, not the screen: when the page shifts for
+   the keyboard, background and form move together as one sheet. The backdrop
+   clips the (taller) drawing to the page so it never adds scroll. */
+body {
+  position: relative;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
   z-index: -1;
+  overflow: hidden;
   pointer-events: none;
+}
+
+.stripes {
+  display: block;
 }
 
 .page {
