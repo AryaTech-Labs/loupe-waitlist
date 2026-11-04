@@ -1,6 +1,7 @@
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config.js";
 import { buildRow, joinWaitlist, MESSAGES, validate } from "./waitlist.js";
 import { startDial, startStripes } from "./dial.js";
+import { keepFormAboveKeyboard } from "./keyboard.js";
 
 const form = document.querySelector("[data-testid='waitlist.form']");
 const email = form.querySelector("#email");
@@ -57,5 +58,6 @@ form.addEventListener("submit", async (event) => {
 
 [email, collects].forEach((input) => input.addEventListener("input", () => input.removeAttribute("aria-invalid")));
 
+keepFormAboveKeyboard({ page: document.querySelector(".page"), form, action: submit });
 startStripes(document.querySelector("[data-testid='waitlist.stripes']"));
 startDial(document.querySelector("[data-testid='waitlist.dial']"));

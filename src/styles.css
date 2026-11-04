@@ -64,14 +64,19 @@
   box-sizing: border-box;
 }
 
+/* The page is one screen: no rubber-band bounce and no pull-to-refresh.
+   It scrolls only when it must (landscape, or while the keyboard is up). */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
-  min-height: 100dvh;
   background: var(--was-background);
   color: var(--was-primary-text);
   font-family: "Geist", system-ui, -apple-system, sans-serif;
@@ -92,25 +97,33 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-lg);
+  gap: var(--space-md);
+  /* Exactly the visible screen, so there is nothing to scroll. */
   min-height: 100vh;
   min-height: 100dvh;
-  padding: max(var(--space-xl), env(safe-area-inset-top)) max(var(--space-md), env(safe-area-inset-right))
-    max(var(--space-lg), env(safe-area-inset-bottom)) max(var(--space-md), env(safe-area-inset-left));
+  padding: max(var(--space-md), env(safe-area-inset-top)) max(var(--space-md), env(safe-area-inset-right))
+    max(var(--space-md), env(safe-area-inset-bottom)) max(var(--space-md), env(safe-area-inset-left));
+}
+
+/* While the keyboard is up, room below the form so it can scroll above it
+   (keyboard.js sets --keyboard to the keyboard's height). */
+.page.keyboard-open {
+  padding-bottom: calc(var(--keyboard, 0px) + var(--space-md));
 }
 
 .hero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   max-width: 24rem;
   text-align: center;
 }
 
+/* Scales with the screen's height (svh: steady while browser bars move). */
 .dial {
-  width: 152px;
-  height: 152px;
+  width: clamp(72px, 17svh, 200px);
+  height: clamp(72px, 17svh, 200px);
   margin-bottom: var(--space-xs);
 }
 
@@ -136,7 +149,7 @@ body {
 }
 
 .pitch {
-  margin: var(--space-sm) 0 0;
+  margin: var(--space-xs) 0 0;
   font-size: 15px;
   color: var(--was-secondary-text);
 }
@@ -144,7 +157,7 @@ body {
 .card {
   width: 100%;
   max-width: 24rem;
-  padding: var(--space-lg);
+  padding: var(--space-md);
   background: var(--was-surface);
   border: 1px solid var(--was-hairline);
   border-radius: var(--radius-md);
@@ -237,6 +250,11 @@ input[aria-invalid="true"] {
   cursor: default;
 }
 
+/* An error takes the fine print's place, so the form never grows. */
+.error:not([hidden]) ~ .fineprint {
+  display: none;
+}
+
 .fineprint {
   margin: 0;
   font-size: 12px;
@@ -297,10 +315,29 @@ form[hidden],
   white-space: nowrap;
 }
 
-@media (min-width: 640px) {
+/* Short phones (an SE with Safari's bars showing): drop the pitch, and leave
+   room for the tagline to wrap where a browser sets the type a little wider. */
+@media (max-height: 600px) {
+  .pitch {
+    display: none;
+  }
+  .page {
+    gap: var(--space-sm);
+  }
+  .dial {
+    width: clamp(64px, 12svh, 200px);
+    height: clamp(64px, 12svh, 200px);
+  }
+}
+
+/* Tablets and desktop: room to breathe. */
+@media (min-width: 640px) and (min-height: 820px) {
   .page {
     justify-content: center;
     gap: var(--space-xl);
+  }
+  .card {
+    padding: var(--space-lg);
   }
   .dial {
     width: 240px;
