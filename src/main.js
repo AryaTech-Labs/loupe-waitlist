@@ -1,5 +1,15 @@
-import { SUPABASE_ANON_KEY, SUPABASE_URL, WELCOME_EMAIL_LIVE } from "./config.js";
-import { buildRow, isValidEmail, joinedBody, joinWaitlist, MESSAGES, normalizeEmail, suggestEmail, validate } from "./waitlist.js";
+import { LOOPS_FORM_URL, LOOPS_LIST_ID, SUPABASE_ANON_KEY, SUPABASE_URL, WELCOME_EMAIL_LIVE } from "./config.js";
+import {
+  addToMailingList,
+  buildRow,
+  isValidEmail,
+  joinedBody,
+  joinWaitlist,
+  MESSAGES,
+  normalizeEmail,
+  suggestEmail,
+  validate,
+} from "./waitlist.js";
 import { startDial, startStripes } from "./dial.js";
 import { keepFormAboveKeyboard } from "./keyboard.js";
 
@@ -54,11 +64,11 @@ function offerSuggestion() {
   else hideSuggestion();
 }
 
-function showJoined(address) {
+function showJoined(address, welcomeSent = false) {
   // The card keeps the form's height, so the dial above it doesn't jump.
   const card = form.closest(".card");
   card.style.minHeight = `${card.getBoundingClientRect().height}px`;
-  joinedBodyText.textContent = joinedBody(address, WELCOME_EMAIL_LIVE);
+  joinedBodyText.textContent = joinedBody(address, welcomeSent);
   form.hidden = true;
   joined.hidden = false;
   joined.focus();
@@ -88,9 +98,16 @@ form.addEventListener("submit", async (event) => {
   hideSuggestion();
   setBusy(true);
   const result = await joinWaitlist(row, { supabaseUrl: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY });
+  if (result.status !== "joined") {
+    setBusy(false);
+    return showError("email", MESSAGES.failed);
+  }
+  // On the list. Now the mailing list, which sends the welcome email; the card
+  // only promises that email when Loops took them.
+  const welcomeSent =
+    WELCOME_EMAIL_LIVE && (await addToMailingList(row, { formUrl: LOOPS_FORM_URL, listId: LOOPS_LIST_ID }));
   setBusy(false);
-  if (result.status === "joined") return showJoined(row.email);
-  showError("email", MESSAGES.failed);
+  showJoined(row.email, welcomeSent);
 });
 
 email.addEventListener("blur", (event) => {
