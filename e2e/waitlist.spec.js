@@ -122,11 +122,13 @@ test("the copy never shows a beta date", async ({ page }) => {
 
 // The page is exactly one screen on phones: nothing to scroll, nothing to drag.
 // Visible areas with the browser's bars showing, small to large.
-// `dial`: the least the dial gets there, since it takes all the spare height (up to 240).
+// `dial`: the least the dial gets there, since it takes all the spare height (up to
+// 240). It was 66, 113, 126 and 143 when sized by 17svh. Room for a line of text
+// that wraps on one system and not another (the SE's tagline does on Linux).
 const SCREENS = [
-  { name: "iPhone SE", width: 375, height: 548, dial: 120 },
-  { name: "iPhone 14", width: 390, height: 664, dial: 155 },
-  { name: "iPhone 15 Pro Max", width: 430, height: 740, dial: 230 },
+  { name: "iPhone SE", width: 375, height: 548, dial: 96 },
+  { name: "iPhone 14", width: 390, height: 664, dial: 140 },
+  { name: "iPhone 15 Pro Max", width: 430, height: 740, dial: 210 },
   { name: "Pixel 7", width: 412, height: 839, dial: 240 },
 ];
 
