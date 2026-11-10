@@ -1,9 +1,19 @@
 import { describe, expect, test } from "vitest";
 
 // dial.js imports the canvas drawing code, which only touches the DOM when called.
-const { BEATS_PER_SECOND, BEAT_MS, beatTime, faceKey, msToNextBeat, msToNextMinute, stripesScale } = await import(
-  "../src/dial.js"
-);
+const {
+  BALANCE_AMPLITUDE,
+  BALANCE_PERIOD_MS,
+  BEATS_PER_SECOND,
+  BEAT_MS,
+  balanceAngle,
+  balanceExposure,
+  beatTime,
+  faceKey,
+  msToNextMinute,
+  smoothClock,
+  stripesScale,
+} = await import("../src/dial.js");
 const { handAngles } = await import("../src/vendor/guilloche.js");
 
 describe("the live dial", () => {
@@ -27,10 +37,36 @@ describe("the live dial", () => {
     expect(handAngles(new Date(beatTime(Date.UTC(2026, 10, 10, 9, 1, 0, 60)))).second).toBe(0);
   });
 
-  test("wakes just after each beat, never before it", () => {
-    expect(msToNextBeat(1_000)).toBe(126);
-    expect(msToNextBeat(1_124)).toBe(2);
-    for (const ms of [5, 61, 124, 999_937]) expect(beatTime(ms + msToNextBeat(ms))).toBe(beatTime(ms) + BEAT_MS);
+  test("the balance passes through rest on every beat, as the cage ticks, swinging 4 times a second", () => {
+    expect(BALANCE_PERIOD_MS).toBe(250);
+    const beat = beatTime(new Date(2026, 10, 10, 10, 8, 30, 600).getTime());
+    for (let k = 0; k < 8; k++) expect(Math.abs(balanceAngle(beat + k * BEAT_MS))).toBeLessThan(1e-9);
+    // Out to full swing midway between beats, one way then the other.
+    const a = balanceAngle(beat + BEAT_MS / 2);
+    const b = balanceAngle(beat + BEAT_MS + BEAT_MS / 2);
+    expect(Math.abs(a)).toBeCloseTo(BALANCE_AMPLITUDE);
+    expect(b).toBeCloseTo(-a);
+    expect(balanceAngle(beat + 31, 0)).toBe(0);
+  });
+
+  test("each frame shows one 60 Hz exposure of the swing; a still balance is one sharp angle", () => {
+    const at = 1_000_000 + 40;
+    const frame = balanceExposure(at);
+    expect(frame).toHaveLength(6);
+    expect(frame[0]).toBe(balanceAngle(at));
+    expect(frame[5]).toBeCloseTo(balanceAngle(at - (5 / 6) * (1000 / 60)));
+    expect(balanceExposure(at, 0)).toEqual([0]);
+  });
+
+  test("the smooth clock is the device clock, and follows it when it's set", () => {
+    let wall = 1_000_000;
+    let mono = 500;
+    const clock = smoothClock(() => wall, () => mono);
+    expect(clock(500)).toBe(1_000_000);
+    expect(clock(516.7)).toBeCloseTo(1_000_016.7);
+    // The device clock jumps an hour ahead: the next frame follows.
+    wall += 3_600_000;
+    expect(clock(500)).toBe(4_600_000);
   });
 
   test("Reduce Motion redraws as each new minute begins", () => {

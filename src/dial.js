@@ -8,11 +8,16 @@
 // - The tourbillon is the seconds: its cage turns once a minute, the cage's
 //   first arm at 12 on the minute. Like a 28,800 bph movement it advances in
 //   eight beats a second, and the hands move with it.
+// - Inside the cage the balance wheel swings four times a second and passes
+//   through its centre on every beat, as it does when it releases the
+//   escapement: the cage ticks at the instant the balance crosses. It moves
+//   every frame, on a sub-millisecond copy of the device clock, with one
+//   frame's motion blur so it reads as a swing, not a flicker.
 // - The face (finish, track, batons, day-date) is drawn once into an image and
-//   kept; a beat only redraws what moves. Beats are timed to the clock, not to
-//   the screen's refresh, so the page wakes eight times a second, not 120.
+//   kept; a frame only redraws what moves (well under a millisecond).
 // - Nothing is drawn while the tab is hidden or the dial is off screen.
-// - Reduce Motion: the face is redrawn once at each new minute.
+// - Reduce Motion: the balance is still and the face is redrawn once at each
+//   new minute.
 // - Reduce Transparency / Increase Contrast: a flat face.
 // Both canvases are decorative.
 import { dayDate, drawDialFace, drawDialMovement, drawGenevaStripes } from "./vendor/guilloche.js";
@@ -27,9 +32,38 @@ export function beatTime(ms) {
   return Math.floor(ms / BEAT_MS) * BEAT_MS;
 }
 
-/** Milliseconds from `ms` to the next beat, plus a hair so the wake-up lands on it. */
-export function msToNextBeat(ms) {
-  return BEAT_MS - (ms % BEAT_MS) + 1;
+/** A full swing of the balance, there and back: two beats (4 Hz). */
+export const BALANCE_PERIOD_MS = 2 * BEAT_MS;
+/** How far the balance swings each way from rest, in degrees. */
+export const BALANCE_AMPLITUDE = 120;
+/** One 60 Hz frame's exposure, sampled this many times for the motion blur. */
+const EXPOSURE_MS = 1000 / 60;
+const EXPOSURE_SAMPLES = 6;
+
+/** The balance's swing at `ms` (epoch ms): at rest on every beat, out to ±amplitude between. */
+export function balanceAngle(ms, amplitude = BALANCE_AMPLITUDE) {
+  const phase = (((ms % BALANCE_PERIOD_MS) + BALANCE_PERIOD_MS) % BALANCE_PERIOD_MS) / BALANCE_PERIOD_MS;
+  return amplitude * Math.sin(2 * Math.PI * phase);
+}
+
+/** The swing across the frame ending at `ms` (a 60 Hz shutter), for the motion blur. */
+export function balanceExposure(ms, amplitude = BALANCE_AMPLITUDE, samples = EXPOSURE_SAMPLES) {
+  if (!amplitude) return [0];
+  return Array.from({ length: samples }, (_, i) => balanceAngle(ms - (i * EXPOSURE_MS) / samples, amplitude));
+}
+
+/**
+ * The device's wall-clock time at a frame, with the frame clock's smoothness:
+ * Date.now() alone ticks in whole milliseconds (coarser in some browsers), and
+ * that jitter would shake a balance moving at hundreds of degrees a second.
+ * Follows the device clock if it's set or drifts by more than 50 ms.
+ */
+export function smoothClock(wallNow = () => Date.now(), monoNow = () => performance.now()) {
+  let offset = wallNow() - monoNow();
+  return (frameTime) => {
+    if (Math.abs(wallNow() - (monoNow() + offset)) > 50) offset = wallNow() - monoNow();
+    return frameTime + offset;
+  };
 }
 
 /** Milliseconds from `ms` to the start of the next minute (plus a hair, so the redraw lands in it). */
@@ -68,9 +102,10 @@ function onSchemeChange(callback) {
   window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener("change", callback);
 }
 
-export function startDial(canvas) {
+/** Starts the live dial. `amplitude`: the balance's swing each way (0 holds it still, as in the app). */
+export function startDial(canvas, { amplitude = BALANCE_AMPLITUDE } = {}) {
   const ctx = canvas.getContext("2d");
-  if (!ctx) return;
+  if (!ctx) return null;
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const reduceTransparency = window.matchMedia("(prefers-reduced-transparency: reduce)");
   const moreContrast = window.matchMedia("(prefers-contrast: more)");
@@ -105,31 +140,35 @@ export function startDial(canvas) {
     return image;
   };
 
-  /** The dial at `ms`: the kept face, then the tourbillon and hands over it. */
-  const paint = (ms) => {
-    const date = new Date(ms);
+  /**
+   * The dial at `shown` (the instant its hands and tourbillon show: a beat, or
+   * any moment under Reduce Motion), the balance at `balance` degrees.
+   */
+  const paint = (shown, balance) => {
+    const date = new Date(shown);
     const image = faceFor(date);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(image, 0, 0);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawDialMovement(ctx, size, date, palette);
-    canvas.dataset.time = String(ms);
+    drawDialMovement(ctx, size, date, palette, balance);
+    const stamp = String(shown);
+    if (canvas.dataset.time !== stamp) canvas.dataset.time = stamp;
   };
 
-  const now = () => (reduceMotion.matches ? Date.now() : beatTime(Date.now()));
+  let clock = smoothClock();
 
-  // Wake at the next beat (or minute), then draw on the frame after it.
-  const schedule = () => {
-    const wait = reduceMotion.matches ? msToNextMinute(Date.now()) : msToNextBeat(Date.now());
-    timer = setTimeout(() => {
-      timer = 0;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        paint(now());
-        schedule();
-      });
-    }, wait);
+  /** One frame: the cage and hands on the last beat, the balance exactly where it is now. */
+  const animate = (frameTime) => {
+    frame = requestAnimationFrame(animate);
+    const ms = clock(frameTime);
+    paint(beatTime(ms), balanceExposure(ms, amplitude));
+  };
+
+  /** Reduce Motion: the minute's face, redrawn as each new minute begins. */
+  const stillMinute = () => {
+    paint(Date.now(), [0]);
+    timer = setTimeout(stillMinute, msToNextMinute(Date.now()));
   };
 
   const stop = () => {
@@ -142,8 +181,9 @@ export function startDial(canvas) {
   const run = () => {
     stop();
     if (document.hidden || !onScreen) return;
-    paint(now());
-    schedule();
+    if (reduceMotion.matches) return stillMinute();
+    clock = smoothClock();
+    animate(performance.now());
   };
 
   /** Something the face depends on changed: draw it again. */
@@ -179,6 +219,12 @@ export function startDial(canvas) {
   reduceMotion.addEventListener("change", run);
   reduceTransparency.addEventListener("change", refresh);
   moreContrast.addEventListener("change", refresh);
+  return {
+    /** A new swing, from the next frame. */
+    setAmplitude(degrees) {
+      amplitude = degrees;
+    },
+  };
 }
 
 /**
