@@ -265,18 +265,124 @@ test.describe("dark mode", () => {
   });
 });
 
-test("the dial tells the device's time and the seconds hand beats", async ({ page }) => {
+test("the dial tells the device's time from the first frame, and the tourbillon beats", async ({ page }) => {
   await page.goto("./");
   const dial = byTestId(page, "waitlist.dial");
-  // Past the opening sweep, the drawn instant is the device clock's, on a beat.
-  await page.waitForTimeout(1300);
-  const first = await dial.evaluate((c) => ({ drawn: Number(c.dataset.time), now: Date.now() }));
-  expect(Math.abs(first.now - first.drawn)).toBeLessThan(400);
-  expect(first.drawn % 125).toBe(0);
-  // It keeps moving: a later read is a later beat.
-  await page.waitForTimeout(400);
-  const second = Number(await dial.evaluate((c) => c.dataset.time));
-  expect(second).toBeGreaterThan(first.drawn);
+  // The drawn instant is the device clock's, on a beat. (A busy test machine
+  // can hold a frame back, so poll for a fresh read.)
+  const lag = () => dial.evaluate((c) => Date.now() - Number(c.dataset.time));
+  await expect.poll(lag).toBeLessThan(250);
+  expect(await lag()).toBeGreaterThanOrEqual(0);
+  // It keeps going, beat by beat: every frame drawn is a beat 125 ms on from
+  // the last, about eight a second, and no beat is drawn twice.
+  const frames = await dial.evaluate(
+    (c) =>
+      new Promise((resolve) => {
+        const drawn = [];
+        const observer = new MutationObserver(() => drawn.push(Number(c.dataset.time)));
+        observer.observe(c, { attributes: true, attributeFilter: ["data-time"] });
+        setTimeout(() => {
+          observer.disconnect();
+          resolve(drawn);
+        }, 2000);
+      }),
+  );
+  expect(frames.length).toBeGreaterThanOrEqual(12);
+  expect(frames.length).toBeLessThanOrEqual(17);
+  for (let i = 0; i < frames.length; i++) {
+    expect(frames[i] % 125).toBe(0);
+    if (i > 0) expect(frames[i] - frames[i - 1]).toBeGreaterThanOrEqual(125);
+  }
+  // On an idle machine every beat is drawn; allow a busy one to drop a couple.
+  const steps = frames.slice(1).map((t, i) => t - frames[i]);
+  expect(steps.filter((s) => s === 125).length).toBeGreaterThanOrEqual(steps.length - 2);
+});
+
+test("the dial is the app's dial exactly: kept face plus moving parts, no extra hands", async ({ page }) => {
+  await page.goto("./");
+  // drawDial (the app's, whole) against the page's two layers, at one instant.
+  const differing = await page.evaluate(async () => {
+    const { drawDial, drawDialFace, drawDialMovement } = await import("./vendor/guilloche.js");
+    const t = {
+      background: "#101216", surface: "#181b21", elevated: "#22262e", hairline: "#22262e", primary: "#eceef2",
+      secondary: "#98a0ae", accent: "#6fa3d9", error: "#f07a72", finishHighlight: "#33363c", finishShadow: "#08090b",
+    };
+    const fonts = { sans: "Geist", mono: "Geist Mono" };
+    const at = new Date(2026, 10, 10, 10, 8, 31, 500);
+    const make = () => {
+      const c = document.createElement("canvas");
+      c.width = c.height = 480;
+      const g = c.getContext("2d");
+      g.setTransform(2, 0, 0, 2, 0, 0);
+      return [c, g];
+    };
+    const [whole, w] = make();
+    drawDial(w, 240, at, t, true, fonts);
+    const [face, f] = make();
+    drawDialFace(f, 240, at, t, true, fonts);
+    const [layered, l] = make();
+    l.setTransform(1, 0, 0, 1, 0, 0);
+    l.drawImage(face, 0, 0);
+    l.setTransform(2, 0, 0, 2, 0, 0);
+    drawDialMovement(l, 240, at, t);
+    const a = w.getImageData(0, 0, 480, 480).data;
+    const b = l.getImageData(0, 0, 480, 480).data;
+    let off = 0;
+    for (let i = 0; i < a.length; i += 4) {
+      if ([0, 1, 2, 3].some((k) => Math.abs(a[i + k] - b[i + k]) > 2)) off++;
+    }
+    return off;
+  });
+  // Pixel for pixel, give or take a few antialiased edge pixels where an
+  // engine rounds a composited layer differently (WebKit on Linux: 9 of
+  // 230,400). A seconds hand alone would be about 550.
+  expect(differing).toBeLessThanOrEqual(24);
+});
+
+test("pinch-zooming in and back out leaves the background covering the page", async ({ page }) => {
+  await page.goto("./");
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  const cover = () =>
+    page.evaluate(() => {
+      const r = document.querySelector("[data-testid='waitlist.stripes']").getBoundingClientRect();
+      return {
+        width: Math.round(r.width) >= document.documentElement.scrollWidth,
+        height: Math.round(r.height) >= document.documentElement.scrollHeight,
+        keyboardRoom: document.querySelector(".page").classList.contains("keyboard-open"),
+      };
+    });
+  const covered = { width: true, height: true, keyboardRoom: false };
+  await expect.poll(cover).toEqual(covered);
+  // Safari on iPhone reports the zoomed-in area as innerWidth/innerHeight and
+  // fires resize; the gesture's last report can land just short of full size.
+  await page.evaluate(async () => {
+    const real = { w: window.innerWidth, h: window.innerHeight };
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (const zoom of [1.5, 2, 3, 2, 1.5, 1.04]) {
+      Object.defineProperty(window, "innerWidth", { configurable: true, get: () => Math.round(real.w / zoom) });
+      Object.defineProperty(window, "innerHeight", { configurable: true, get: () => Math.round(real.h / zoom) });
+      window.dispatchEvent(new Event("resize"));
+      await wait(60);
+    }
+  });
+  await page.waitForTimeout(200);
+  expect(await cover()).toEqual(covered);
+});
+
+test("a real pinch-zoom isn't mistaken for the keyboard (Chrome)", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "page scale is a Chrome DevTools control");
+  await page.goto("./");
+  const cdp = await page.context().newCDPSession(page);
+  const height = () => page.evaluate(() => document.documentElement.scrollHeight);
+  const before = await height();
+  for (const pageScaleFactor of [2, 3, 5]) await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor });
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.visualViewport.scale)).toBeGreaterThan(4);
+  await expect(page.locator(".page")).not.toHaveClass(/keyboard-open/);
+  expect(await height()).toBe(before);
+  await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+  await page.waitForTimeout(300);
+  expect(await height()).toBe(before);
 });
 
 test("the dial follows the device's time zone", async ({ browser }) => {

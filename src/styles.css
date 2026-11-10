@@ -3,17 +3,34 @@
  * loupe-web src/app/globals.css (which mirrors iOS exactly). Flat surfaces,
  * 1px hairlines, no shadows; accent only on the call to action.
  */
+/* Geist, cut to what the page sends (scripts/subset-fonts.py): Latin is
+   preloaded; the rest arrives only if someone types it. */
 @font-face {
   font-family: "Geist";
-  src: url("fonts/Geist-Variable.woff2") format("woff2");
+  src: url("fonts/Geist-Latin.woff2") format("woff2");
   font-weight: 100 900;
   font-display: swap;
+  unicode-range:
+    U+0000-024F, U+0259, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0300-0304, U+0308-0309, U+0323, U+0329,
+    U+1E00-1EFF, U+2000-206F, U+20A0-20CF, U+2100-2199, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: "Geist Mono";
-  src: url("fonts/GeistMono-Variable.woff2") format("woff2");
+  font-family: "Geist";
+  src: url("fonts/Geist-Other.woff2") format("woff2");
   font-weight: 100 900;
   font-display: swap;
+  unicode-range:
+    U+0250-0258, U+025A-02BA, U+02BD-02C5, U+02C7-02D9, U+02DB, U+02DD-02FF, U+0305-0307, U+030A-0322,
+    U+0324-0328, U+032A-1DFF, U+1F00-1FFF, U+2070-209F, U+20D0-20FF, U+219A-2211, U+2213-2214, U+2216-FEFE,
+    U+FF00-FFFC, U+FFFE-10FFFF;
+}
+/* Only the dial's day-date uses it: SUN–SAT and 0–9. */
+@font-face {
+  font-family: "Geist Mono";
+  src: url("fonts/GeistMono-Dial.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0020, U+0030-0039, U+0041, U+0044-0046, U+0048-0049, U+004D-004F, U+0052-0055, U+0057;
 }
 
 :root {

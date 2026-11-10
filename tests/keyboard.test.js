@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { KEYBOARD_MIN, MARGIN, keyboardHeight, scrollDelta } from "../src/keyboard.js";
+import { KEYBOARD_MIN, MARGIN, isZoomed, keyboardHeight, scrollDelta } from "../src/keyboard.js";
 
 // dial.js imports the canvas drawing code, which only touches the DOM when called.
 const { stripesHeight } = await import("../src/dial.js");
@@ -11,6 +11,16 @@ describe("stripesHeight", () => {
   });
   it("doesn't depend on the current visible height once the screen is taller", () => {
     expect(stripesHeight(600, 390, 844)).toBe(stripesHeight(700, 390, 844));
+  });
+});
+
+describe("isZoomed", () => {
+  it("is pinch-zoom past normal size, not rounding or a browser without the API", () => {
+    expect(isZoomed(1)).toBe(false);
+    expect(isZoomed(1.004)).toBe(false);
+    expect(isZoomed(undefined)).toBe(false);
+    expect(isZoomed(1.5)).toBe(true);
+    expect(isZoomed(4)).toBe(true);
   });
 });
 

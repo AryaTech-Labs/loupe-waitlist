@@ -1,38 +1,35 @@
 // The app's Welcome artwork, as loupe-web draws it (src/components/guilloche-watch.tsx):
 // a live guilloché dial that tells the visitor's own time over Côtes de Genève
-// stripes, with a seconds hand of our own on top.
+// stripes.
 //
 // - The time is the device's clock (`new Date()`, its local time zone), read
-//   afresh on every frame, so it is right after sleep, a hidden tab or a time
-//   zone change.
-// - The seconds hand beats eight times a second, as a 28,800 bph movement does;
-//   the dial redraws only on a beat. On load it sweeps up from 12 to the time.
+//   afresh at every beat, so it is right after sleep, a hidden tab or a time
+//   zone change. The day-date turns over at the visitor's midnight.
+// - The tourbillon is the seconds: its cage turns once a minute, the cage's
+//   first arm at 12 on the minute. Like a 28,800 bph movement it advances in
+//   eight beats a second, and the hands move with it.
+// - The face (finish, track, batons, day-date) is drawn once into an image and
+//   kept; a beat only redraws what moves. Beats are timed to the clock, not to
+//   the screen's refresh, so the page wakes eight times a second, not 120.
 // - Nothing is drawn while the tab is hidden or the dial is off screen.
-// - Reduce Motion: no seconds hand, one redraw at each new minute.
+// - Reduce Motion: the face is redrawn once at each new minute.
 // - Reduce Transparency / Increase Contrast: a flat face.
 // Both canvases are decorative.
-import { drawDial, drawGenevaStripes, handAngles } from "./vendor/guilloche.js";
+import { dayDate, drawDialFace, drawDialMovement, drawGenevaStripes } from "./vendor/guilloche.js";
 import { fallsBackToPlain } from "./vendor/finish.js";
 
 /** 28,800 bph: eight beats a second. */
 export const BEATS_PER_SECOND = 8;
-const BEAT_MS = 1000 / BEATS_PER_SECOND;
-export const INTRO_MS = 1100;
+export const BEAT_MS = 1000 / BEATS_PER_SECOND;
 
 /** The instant of the last beat at or before `ms` (epoch ms). */
 export function beatTime(ms) {
   return Math.floor(ms / BEAT_MS) * BEAT_MS;
 }
 
-/** Ease-out cubic, 0…1. */
-export function easeOut(p) {
-  const t = Math.min(1, Math.max(0, p));
-  return 1 - (1 - t) ** 3;
-}
-
-/** The seconds hand during the opening sweep: from 12 up to the live angle. */
-export function introSecondAngle(liveAngle, elapsedMs) {
-  return liveAngle * easeOut(elapsedMs / INTRO_MS);
+/** Milliseconds from `ms` to the next beat, plus a hair so the wake-up lands on it. */
+export function msToNextBeat(ms) {
+  return BEAT_MS - (ms % BEAT_MS) + 1;
 }
 
 /** Milliseconds from `ms` to the start of the next minute (plus a hair, so the redraw lands in it). */
@@ -40,34 +37,10 @@ export function msToNextMinute(ms) {
   return 60_000 - (ms % 60_000) + 20;
 }
 
-/**
- * The seconds hand, in the dial's 100-unit space: a slim red hand with a
- * counterweight tail, over the hour and minute hands, under its own cap.
- */
-export function drawSecondsHand(ctx, size, degrees, t) {
-  ctx.save();
-  ctx.scale(size / 100, size / 100);
-  ctx.translate(50, 50);
-  ctx.rotate((degrees * Math.PI) / 180);
-  ctx.fillStyle = t.error;
-  ctx.beginPath();
-  ctx.moveTo(-0.32, 9);
-  ctx.lineTo(-0.22, -35.5);
-  ctx.lineTo(0.22, -35.5);
-  ctx.lineTo(0.32, 9);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(0, 6.4, 1.35, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(0, 0, 1.25, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = t.surface;
-  ctx.beginPath();
-  ctx.arc(0, 0, 0.45, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+/** What the kept face depends on, besides size and palette: the day-date. */
+export function faceKey(date) {
+  const { day, date: num } = dayDate(date);
+  return `${day} ${num}`;
 }
 
 function tokens() {
@@ -88,6 +61,8 @@ function tokens() {
 }
 
 const TYPEFACES = { sans: '"Geist", system-ui, sans-serif', mono: '"Geist Mono", ui-monospace, monospace' };
+/** Canvas text never asks for a web font itself, so the dial's two are asked for here. */
+const DIAL_FONTS = ['500 4px "Geist Mono"', '600 3px "Geist"'];
 
 function onSchemeChange(callback) {
   window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener("change", callback);
@@ -101,99 +76,109 @@ export function startDial(canvas) {
   const moreContrast = window.matchMedia("(prefers-contrast: more)");
   let palette = tokens();
   let size = 0;
+  let dpr = 1;
+  let face = null; // { image, key }
+  let timer = 0;
   let frame = 0;
-  let minuteTimer = 0;
-  let lastBeat = -1;
-  let introStart = reduceMotion.matches ? null : performance.now();
   let onScreen = true;
 
   const resize = () => {
-    const dpr = window.devicePixelRatio || 1;
+    dpr = window.devicePixelRatio || 1;
     size = canvas.getBoundingClientRect().width || 200;
     canvas.width = Math.round(size * dpr);
     canvas.height = Math.round(size * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    face = null;
   };
 
-  /** Draws the dial at `ms`; the seconds hand at `secondsAngle`, or none. */
-  const paint = (ms, secondsAngle) => {
+  /** The still face for `date`'s day, drawn once and kept. */
+  const faceFor = (date) => {
+    const key = faceKey(date);
+    if (face?.key === key) return face.image;
+    const image = document.createElement("canvas");
+    image.width = canvas.width;
+    image.height = canvas.height;
+    const g = image.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const drawsFinish = !fallsBackToPlain(reduceTransparency.matches, moreContrast.matches);
-    drawDial(ctx, size, new Date(ms), palette, drawsFinish, TYPEFACES);
-    if (secondsAngle !== null) drawSecondsHand(ctx, size, secondsAngle, palette);
+    drawDialFace(g, size, date, palette, drawsFinish, TYPEFACES);
+    face = { image, key };
+    return image;
+  };
+
+  /** The dial at `ms`: the kept face, then the tourbillon and hands over it. */
+  const paint = (ms) => {
+    const date = new Date(ms);
+    const image = faceFor(date);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawDialMovement(ctx, size, date, palette);
     canvas.dataset.time = String(ms);
   };
 
-  const tick = () => {
-    frame = 0;
-    const beat = beatTime(Date.now());
-    const live = handAngles(new Date(beat)).second;
-    if (introStart !== null) {
-      const elapsed = performance.now() - introStart;
-      paint(beat, introSecondAngle(live, elapsed));
-      if (elapsed >= INTRO_MS) introStart = null;
-      lastBeat = beat;
-    } else if (beat !== lastBeat) {
-      paint(beat, live);
-      lastBeat = beat;
-    }
-    frame = requestAnimationFrame(tick);
-  };
+  const now = () => (reduceMotion.matches ? Date.now() : beatTime(Date.now()));
 
-  /** Reduce Motion: the minute's face, redrawn as each new minute begins. */
-  const stillMinute = () => {
-    paint(Date.now(), null);
-    minuteTimer = setTimeout(stillMinute, msToNextMinute(Date.now()));
+  // Wake at the next beat (or minute), then draw on the frame after it.
+  const schedule = () => {
+    const wait = reduceMotion.matches ? msToNextMinute(Date.now()) : msToNextBeat(Date.now());
+    timer = setTimeout(() => {
+      timer = 0;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        paint(now());
+        schedule();
+      });
+    }, wait);
   };
 
   const stop = () => {
-    if (frame) cancelAnimationFrame(frame);
-    clearTimeout(minuteTimer);
+    clearTimeout(timer);
+    cancelAnimationFrame(frame);
+    timer = 0;
     frame = 0;
-    minuteTimer = 0;
   };
 
   const run = () => {
     stop();
     if (document.hidden || !onScreen) return;
-    lastBeat = -1;
-    if (reduceMotion.matches) stillMinute();
-    else tick();
+    paint(now());
+    schedule();
   };
 
-  const redraw = () => {
-    lastBeat = -1;
-    if (reduceMotion.matches) paint(Date.now(), null);
-    else if (!frame) paint(beatTime(Date.now()), handAngles(new Date(beatTime(Date.now()))).second);
+  /** Something the face depends on changed: draw it again. */
+  const refresh = () => {
+    face = null;
+    run();
   };
 
   resize();
   run();
-  // A frame for anything that reads the canvas before the first animation frame.
-  if (!reduceMotion.matches) paint(beatTime(Date.now()), 0);
-  document.fonts?.ready.then(redraw).catch(() => {});
+  if (document.fonts) Promise.all(DIAL_FONTS.map((f) => document.fonts.load(f))).then(refresh, () => {});
   document.addEventListener("visibilitychange", run);
   if ("IntersectionObserver" in window) {
     new IntersectionObserver((entries) => {
-      onScreen = entries.some((e) => e.isIntersecting);
+      const visible = entries.some((e) => e.isIntersecting);
+      if (visible === onScreen) return;
+      onScreen = visible;
       run();
     }).observe(canvas);
   }
   onSchemeChange(() => {
     palette = tokens();
-    redraw();
+    refresh();
   });
   window.addEventListener("resize", () => {
-    // The dial is sized by svh, so browser bars moving don't change it.
-    if ((canvas.getBoundingClientRect().width || 200) === size) return;
+    // The dial is sized by svh, so browser bars and pinch-zoom leave it be;
+    // browser zoom changes the pixel ratio, and the dial is drawn sharp again.
+    const width = canvas.getBoundingClientRect().width || 200;
+    if (width === size && (window.devicePixelRatio || 1) === dpr) return;
     resize();
-    redraw();
-  });
-  reduceMotion.addEventListener("change", () => {
-    introStart = null;
     run();
   });
-  reduceTransparency.addEventListener("change", redraw);
-  moreContrast.addEventListener("change", redraw);
+  reduceMotion.addEventListener("change", run);
+  reduceTransparency.addEventListener("change", refresh);
+  moreContrast.addEventListener("change", refresh);
 }
 
 /**
@@ -207,30 +192,43 @@ export function stripesHeight(innerHeight, screenWidth, screenHeight) {
   return Math.ceil(Math.max(innerHeight, screenWidth, screenHeight) * 1.6);
 }
 
+/**
+ * Pixels per CSS px for the stripes. They're soft ramps, so past 2x nothing
+ * shows but memory: a 3x phone would spend 23 MB on them instead of 10.
+ */
+export function stripesScale(devicePixelRatio) {
+  return Math.min(devicePixelRatio || 1, 2);
+}
+
 export function startStripes(canvas) {
   let frame = 0;
-  let drawnWidth = 0;
+  let drawn = "";
   const height = stripesHeight(window.innerHeight, window.screen.width, window.screen.height);
+  // The page's own width (the layout viewport). Not innerWidth: Safari on
+  // iPhone shrinks that while pinch-zoomed, and stripes redrawn to it would
+  // stop short of the edge once zoomed back out.
+  const width = () => canvas.parentElement?.clientWidth || document.documentElement.clientWidth || window.innerWidth;
+  const key = () => `${width()}@${stripesScale(window.devicePixelRatio)}`;
   const render = () => {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      const dpr = window.devicePixelRatio || 1;
-      const w = window.innerWidth;
-      drawnWidth = w;
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(height * dpr);
+      const scale = stripesScale(window.devicePixelRatio);
+      const w = width();
+      drawn = key();
+      canvas.width = Math.round(w * scale);
+      canvas.height = Math.round(height * scale);
       canvas.style.width = `${w}px`;
       canvas.style.height = `${height}px`;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
       drawGenevaStripes(ctx, w, height, tokens());
     });
   };
   render();
-  // Only a new width (rotation) redraws; height changes never do.
+  // Only a new page width (rotation) or browser zoom redraws; height changes never do.
   window.addEventListener("resize", () => {
-    if (window.innerWidth !== drawnWidth) render();
+    if (key() !== drawn) render();
   });
   onSchemeChange(render);
 }

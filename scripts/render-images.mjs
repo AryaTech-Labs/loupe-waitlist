@@ -1,6 +1,7 @@
 // Renders the page's still images from the same drawing code the page uses,
 // so they always match the live dial:
-//   src/og-image.png         1200×630 link preview (dark), the dial at 10:08:31
+//   src/og-image.jpg         1200×630 link preview (dark), the dial at 10:08:31
+//                            (JPEG: WhatsApp drops preview images over ~300 KB)
 //   src/apple-touch-icon.png  180×180 home-screen icon (dark), the dial alone
 // Run: node scripts/render-images.mjs   (needs Playwright's Chromium)
 import { spawn } from "node:child_process";
@@ -15,10 +16,14 @@ const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ colorScheme: "dark" });
   await page.goto(`http://localhost:${PORT}/`);
-  await page.evaluate(() => document.fonts.ready);
+  // Canvas text doesn't fetch web fonts itself; ask for every face drawn below.
+  await page.evaluate(() =>
+    Promise.all(
+      ['500 4px "Geist Mono"', '600 3px "Geist"', '500 30px "Geist"', '700 96px "Geist"'].map((f) => document.fonts.load(f)),
+    ),
+  );
   const images = await page.evaluate(async () => {
-    const { drawDial, drawGenevaStripes, handAngles } = await import("/vendor/guilloche.js");
-    const { drawSecondsHand } = await import("/dial.js");
+    const { drawDial, drawGenevaStripes } = await import("/vendor/guilloche.js");
     const css = getComputedStyle(document.documentElement);
     const v = (name) => css.getPropertyValue(name).trim();
     const t = {
@@ -36,10 +41,7 @@ try {
     const fonts = { sans: '"Geist", system-ui, sans-serif', mono: '"Geist Mono", ui-monospace, monospace' };
     // The watchmaker's 10:08, on a Tuesday the 3rd (no real date in the copy).
     const at = new Date(2026, 10, 3, 10, 8, 31);
-    const dialAt = (ctx, size) => {
-      drawDial(ctx, size, at, t, true, fonts);
-      drawSecondsHand(ctx, size, handAngles(at).second, t);
-    };
+    const dialAt = (ctx, size) => drawDial(ctx, size, at, t, true, fonts);
     const canvas = (w, h) => {
       const c = document.createElement("canvas");
       c.width = w;
@@ -75,12 +77,12 @@ try {
     dialAt(s, 164);
     i.drawImage(small, 8, 8);
 
-    return { og: og.toDataURL("image/png"), icon: icon.toDataURL("image/png") };
+    return { og: og.toDataURL("image/jpeg", 0.92), icon: icon.toDataURL("image/png") };
   });
   const bytes = (dataUrl) => Buffer.from(dataUrl.split(",")[1], "base64");
-  await writeFile("src/og-image.png", bytes(images.og));
+  await writeFile("src/og-image.jpg", bytes(images.og));
   await writeFile("src/apple-touch-icon.png", bytes(images.icon));
-  console.log("wrote src/og-image.png and src/apple-touch-icon.png");
+  console.log("wrote src/og-image.jpg and src/apple-touch-icon.png");
 } finally {
   await browser.close();
   server.kill();

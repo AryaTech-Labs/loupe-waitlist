@@ -19,18 +19,26 @@
     <meta property="og:url" content="https://loupeweb.com/" />
     <meta property="og:title" content="Loupe — Join the beta" />
     <meta property="og:description" content="Any watch welcome. Every watch celebrated." />
-    <meta property="og:image" content="https://loupeweb.com/og-image.png" />
+    <meta property="og:image" content="https://loupeweb.com/og-image.jpg" />
     <meta property="og:image:alt" content="The Loupe watch dial over Côtes de Genève stripes" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Loupe — Join the beta" />
     <meta name="twitter:description" content="Any watch welcome. Every watch celebrated." />
-    <meta name="twitter:image" content="https://loupeweb.com/og-image.png" />
+    <meta name="twitter:image" content="https://loupeweb.com/og-image.jpg" />
     <link rel="icon" href="favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-title" content="Loupe" />
-    <link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/Geist-Latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/GeistMono-Dial.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="styles.css" />
     <script type="module" src="main.js"></script>
+    <!-- main.js's imports, fetched alongside it instead of one after another. -->
+    <link rel="modulepreload" href="dial.js" />
+    <link rel="modulepreload" href="vendor/guilloche.js" />
+    <link rel="modulepreload" href="vendor/finish.js" />
+    <link rel="modulepreload" href="keyboard.js" />
+    <link rel="modulepreload" href="waitlist.js" />
+    <link rel="modulepreload" href="config.js" />
   </head>
   <body>
     <div class="backdrop" aria-hidden="true">
