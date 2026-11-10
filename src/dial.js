@@ -208,14 +208,18 @@ export function startDial(canvas, { amplitude = BALANCE_AMPLITUDE } = {}) {
     palette = tokens();
     refresh();
   });
-  window.addEventListener("resize", () => {
-    // The dial is sized by svh, so browser bars and pinch-zoom leave it be;
-    // browser zoom changes the pixel ratio, and the dial is drawn sharp again.
+  // On phones the dial takes the screen's spare height, so the layout sets its
+  // size (and can change it: rotation, the fonts settling). Browser zoom
+  // changes the pixel ratio. Either way it is drawn sharp at its new size;
+  // browser bars, the keyboard and pinch-zoom leave it as it is.
+  const fit = () => {
     const width = canvas.getBoundingClientRect().width || 200;
     if (width === size && (window.devicePixelRatio || 1) === dpr) return;
     resize();
     run();
-  });
+  };
+  if ("ResizeObserver" in window) new ResizeObserver(fit).observe(canvas);
+  window.addEventListener("resize", fit);
   reduceMotion.addEventListener("change", run);
   reduceTransparency.addEventListener("change", refresh);
   moreContrast.addEventListener("change", refresh);
