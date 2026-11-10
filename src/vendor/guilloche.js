@@ -1,5 +1,6 @@
 // Vendored from AryaTech-Labs/loupe-web src/lib/guilloche.ts @ ca238d3 (transpiled with tsc). One change:
-// drawDial is split into drawDialFace + drawDialMovement (same drawing, same order).
+// drawDial is split into drawDialFace + drawDialMovement (same drawing, same order), and
+// drawDialMovement can swing the balance wheel (by default it stands still, as in the app).
 // The dial is the one on the app's Welcome screen; keep it in step with the app.
 import { drawFinish, withAlpha } from "./finish.js";
 const VIEWBOX = 100;
@@ -137,8 +138,12 @@ export function drawDialFace(ctx, size, date, t, drawsFinish, fonts) {
         ctx.letterSpacing = "0px";
     ctx.restore();
 }
-/** The parts that move: the tourbillon (the seconds), the hands and the centre pin. Draws over the face. */
-export function drawDialMovement(ctx, size, date, t) {
+/**
+ * The parts that move: the tourbillon (the seconds), the hands and the centre pin. Draws over the face.
+ * `balance` (waitlist addition): the balance wheel's swing in degrees, relative to the cage. One angle
+ * draws it sharp; several are one frame's exposure, drawn as a motion blur. [0] is the app's still balance.
+ */
+export function drawDialMovement(ctx, size, date, t, balance = [0]) {
     ctx.save();
     const s = size / VIEWBOX;
     ctx.scale(s, s);
@@ -195,13 +200,18 @@ export function drawDialMovement(ctx, size, date, t) {
     ctx.lineWidth = 0.5;
     ctx.strokeStyle = t.primary;
     ctx.stroke();
-    ctx.beginPath();
-    for (const deg of [45, 135, 225, 315]) {
-        ctx.moveTo(0, 0);
-        ctx.lineTo(...offset(2.2, deg));
-    }
     ctx.lineWidth = 0.35;
-    ctx.stroke();
+    // Each exposure at an even share, so the spokes are 95% solid where they overlap (at the turn).
+    ctx.globalAlpha = balance.length === 1 ? 1 : 1 - Math.pow(0.05, 1 / balance.length);
+    for (const swing of balance) {
+        ctx.beginPath();
+        for (const deg of [45, 135, 225, 315]) {
+            ctx.moveTo(0, 0);
+            ctx.lineTo(...offset(2.2, deg + swing));
+        }
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
     circlePath(ctx, 0, 0, 0.6);
     ctx.fillStyle = t.error;
     ctx.fill();
