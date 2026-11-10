@@ -297,6 +297,17 @@ input[aria-invalid="true"] {
   outline-offset: 2px;
 }
 
+/* Shown instead of the form when the page is framed by another site. */
+.framed-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 24rem;
+  padding: 0 var(--space-lg);
+  text-decoration: none;
+}
+
 .primary:disabled {
   opacity: 0.6;
   cursor: default;

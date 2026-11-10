@@ -130,6 +130,22 @@ suggestionFix.addEventListener("click", () => {
 
 [email, collects].forEach((input) => input.addEventListener("input", () => input.removeAttribute("aria-invalid")));
 
+// Clickjacking: GitHub Pages can't send frame-ancestors or X-Frame-Options, so
+// inside another site's frame the page hides its form and offers a link that
+// opens loupeweb.com properly instead.
+if (window.top !== window.self) {
+  const card = form.closest(".card");
+  card.style.display = "none";
+  const open = document.createElement("a");
+  open.href = "https://loupeweb.com/";
+  open.target = "_top";
+  open.rel = "noopener";
+  open.className = "primary framed-open";
+  open.dataset.testid = "waitlist.framed";
+  open.textContent = "Open Loupe to join the waitlist";
+  card.after(open);
+}
+
 keepFormAboveKeyboard({ page: document.querySelector(".page"), form, action: submit });
 startStripes(document.querySelector("[data-testid='waitlist.stripes']"));
 startDial(document.querySelector("[data-testid='waitlist.dial']"));
