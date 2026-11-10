@@ -120,9 +120,41 @@ export function suggestEmail(raw) {
   return best && !tied ? `${local}@${best}` : null;
 }
 
-/** What the card says once someone's on the list. */
-export function joinedBody(email, welcomeEmailLive) {
-  return welcomeEmailLive ? `We've sent a welcome email to ${email}.` : "We'll email you when your invite is ready.";
+/** What the card says once someone's on the list: the welcome email is named only once Loops took them. */
+export function joinedBody(email, welcomeSent) {
+  return welcomeSent ? `We've sent a welcome email to ${email}.` : "We'll email you when your invite is ready.";
+}
+
+/** The Loops form post: the list, where they came from, and what they collect. */
+export function loopsFormBody(row, listId) {
+  const body = new URLSearchParams({ email: row.email, source: "waitlist", userGroup: "Beta waitlist", mailingLists: listId });
+  if (row.collects) body.set("collects", row.collects);
+  return body;
+}
+
+/**
+ * Adds the person to the Loops mailing list, which sends the welcome email.
+ * Resolves to true only when Loops says it took them; never throws, and gives
+ * up after `timeoutMs` so a slow Loops never holds up joining.
+ */
+export async function addToMailingList(row, { formUrl, listId, fetchImpl = globalThis.fetch, timeoutMs = 5000 }) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(formUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: loopsFormBody(row, listId).toString(),
+      signal: controller.signal,
+    });
+    if (!response.ok) return false;
+    const data = await response.json().catch(() => null);
+    return data?.success === true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Checks the form before anything is sent; null when it can go. */

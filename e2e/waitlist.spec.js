@@ -5,6 +5,19 @@ import { expect, test } from "@playwright/test";
 // what was (and wasn't) sent.
 
 const SUPABASE = "https://dxrmrfaptbhzyegbbmnz.supabase.co";
+const LOOPS = "https://app.loops.so";
+
+/** Answers Loops' form endpoint in the browser and records what was sent. */
+async function answerLoops(page, status = 200, body = { success: true }) {
+  const requests = [];
+  await page.route(`${LOOPS}/**`, async (route) => {
+    const request = route.request();
+    requests.push({ method: request.method(), url: request.url(), body: request.postData(), headers: request.headers() });
+    if (status === 0) return route.abort();
+    await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  return requests;
+}
 
 async function answerInsert(page, status) {
   const requests = [];
@@ -22,6 +35,9 @@ test.beforeEach(async ({ page }) => {
   page.on("pageerror", (error) => {
     throw error;
   });
+  // Loops is answered in the browser too (a test can override this): no test,
+  // here or against the live site, adds a real contact or sends a real email.
+  await answerLoops(page);
 });
 
 test("the phone layout: dial, wordmark, form, nothing wider than the screen", async ({ page }) => {
@@ -105,12 +121,14 @@ test("a bad email is caught before anything is sent", async ({ page }) => {
 
 test("a bot that fills the hidden field sees success and sends nothing", async ({ page }) => {
   const requests = await answerInsert(page, 201);
+  const loops = await answerLoops(page);
   await page.goto("./");
   await page.getByLabel("Email").fill("bot@example.com");
   await page.locator("#website").fill("https://spam.example", { force: true });
   await byTestId(page, "waitlist.submit").click();
   await expect(byTestId(page, "waitlist.joined")).toBeVisible();
   expect(requests).toHaveLength(0);
+  expect(loops).toHaveLength(0);
 });
 
 test("a likely typo gets a 'Did you mean' on the first Join, sends nothing, and moves nothing", async ({ page }) => {
@@ -181,26 +199,78 @@ test("the fine print says what we'll send, and Privacy opens the policy in a new
   expect(await page.locator(".fineprint").evaluate((p) => p.getBoundingClientRect().height)).toBeLessThanOrEqual(20);
 });
 
-test("after joining, until the welcome email is live: the invite line", async ({ page }) => {
-  await answerInsert(page, 201);
+test("after joining, the person goes to the Loops list and the card names the welcome email", async ({ page }) => {
+  const inserts = await answerInsert(page, 201);
+  const loops = await answerLoops(page);
   await page.goto("./");
-  await page.getByLabel("Email").fill("collector@example.com");
+  await page.getByLabel("Email").fill("  Collector@Example.com ");
+  await page.getByLabel(/What do you collect\?/).fill("Vintage divers");
   await byTestId(page, "waitlist.submit").click();
-  await expect(byTestId(page, "waitlist.joined")).toContainText("We'll email you when your invite is ready.");
+  await expect(byTestId(page, "waitlist.joined")).toContainText("We've sent a welcome email to collector@example.com.");
+  expect(inserts).toHaveLength(1);
+  expect(loops).toHaveLength(1);
+  expect(loops[0].method).toBe("POST");
+  expect(loops[0].url).toBe(`${LOOPS}/api/newsletter-form/cmwb6vqci006n0j0d9fl670vn`);
+  expect(loops[0].headers["content-type"]).toBe("application/x-www-form-urlencoded");
+  expect(Object.fromEntries(new URLSearchParams(loops[0].body))).toEqual({
+    email: "collector@example.com",
+    source: "waitlist",
+    userGroup: "Beta waitlist",
+    mailingLists: "cmwb7tp127bfc0jzggi1gb7kp",
+    collects: "Vintage divers",
+  });
 });
 
-test("after joining, once the welcome email is live: it names the address", async ({ page }) => {
+test("someone already on the list is still sent to Loops (it ignores repeats)", async ({ page }) => {
+  await answerInsert(page, 409);
+  const loops = await answerLoops(page);
+  await page.goto("./");
+  await page.getByLabel("Email").fill("again@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toBeVisible();
+  expect(loops).toHaveLength(1);
+});
+
+for (const [name, status, body] of [
+  ["refuses", 400, { success: false, message: "Something went wrong" }],
+  ["is rate-limited", 429, { success: false, message: "Too many signups" }],
+  ["can't be reached", 0, null],
+]) {
+  test(`when Loops ${name}: still on the list, and no promise of an email`, async ({ page }) => {
+    await answerInsert(page, 201);
+    await answerLoops(page, status, body);
+    await page.goto("./");
+    await page.getByLabel("Email").fill("collector@example.com");
+    await byTestId(page, "waitlist.submit").click();
+    await expect(byTestId(page, "waitlist.joined")).toContainText("You're on the list.");
+    await expect(byTestId(page, "waitlist.joined")).toContainText("We'll email you when your invite is ready.");
+    await expect(byTestId(page, "waitlist.error")).toBeHidden();
+  });
+}
+
+test("a Supabase failure never reaches Loops", async ({ page }) => {
+  await answerInsert(page, 500);
+  const loops = await answerLoops(page);
+  await page.goto("./");
+  await page.getByLabel("Email").fill("someone@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.error")).toBeVisible();
+  expect(loops).toHaveLength(0);
+});
+
+test("with the welcome email switched off: no Loops call, the invite line", async ({ page }) => {
   await answerInsert(page, 201);
-  // config.js with the welcome email switched on.
+  const loops = await answerLoops(page);
   await page.route("**/config.js*", async (route) => {
     const response = await route.fetch();
-    const body = (await response.text()).replace("WELCOME_EMAIL_LIVE = false", "WELCOME_EMAIL_LIVE = true");
+    const body = (await response.text()).replace("WELCOME_EMAIL_LIVE = true", "WELCOME_EMAIL_LIVE = false");
     await route.fulfill({ response, body });
   });
   await page.goto("./");
   await page.getByLabel("Email").fill("collector@example.com");
   await byTestId(page, "waitlist.submit").click();
-  await expect(byTestId(page, "waitlist.joined")).toContainText("We've sent a welcome email to collector@example.com.");
+  await expect(byTestId(page, "waitlist.joined")).toContainText("We'll email you when your invite is ready.");
+  expect(loops).toHaveLength(0);
 });
 
 test("the copy never shows a beta date", async ({ page }) => {
