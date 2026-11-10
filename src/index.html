@@ -72,7 +72,7 @@
               maxlength="254"
               required
               placeholder="you@example.com"
-              aria-describedby="waitlist-error"
+              aria-describedby="waitlist-error waitlist-suggestion"
             />
           </div>
           <div class="field">
@@ -94,7 +94,12 @@
           </div>
           <p id="waitlist-error" class="error" data-testid="waitlist.error" role="alert" hidden></p>
           <button type="submit" class="primary" data-testid="waitlist.submit">Join the waitlist</button>
-          <p class="fineprint">We'll only email you about the Loupe beta.</p>
+          <!-- A likely typo in the email ("gmial.com") takes the fine print's place. -->
+          <p id="waitlist-suggestion" class="suggestion" data-testid="waitlist.suggestion" role="status" hidden>
+            <span>Did you mean</span>
+            <button type="button" class="suggestion-fix" data-testid="waitlist.suggestion.fix"></button><span>?</span>
+          </p>
+          <p class="fineprint">Beta and launch news only. Unsubscribe anytime.</p>
         </form>
 
         <div class="joined" data-testid="waitlist.joined" tabindex="-1" hidden>
@@ -107,7 +112,10 @@
         </div>
       </section>
 
-      <footer class="footer">© 2026 Arya Tech</footer>
+      <footer class="footer">
+        © 2026 Arya Tech ·
+        <a href="https://jacob-gonsalves.github.io/loupe/privacy-policy" target="_blank" rel="noopener">Privacy</a>
+      </footer>
     </main>
   </body>
 </html>

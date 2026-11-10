@@ -113,6 +113,96 @@ test("a bot that fills the hidden field sees success and sends nothing", async (
   expect(requests).toHaveLength(0);
 });
 
+test("a likely typo gets a 'Did you mean' on the first Join, sends nothing, and moves nothing", async ({ page }) => {
+  const requests = await answerInsert(page, 201);
+  await page.goto("./");
+  const before = await dialSize(page);
+  await page.getByLabel("Email").fill("name@gmial.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.suggestion")).toBeVisible();
+  await expect(byTestId(page, "waitlist.suggestion")).toContainText("Did you mean");
+  await expect(byTestId(page, "waitlist.suggestion.fix")).toHaveText("name@gmail.com");
+  await expect(page.locator(".fineprint")).toBeHidden();
+  expect(requests).toHaveLength(0);
+  // It takes the fine print's place: same page, same dial, nothing to scroll.
+  expect(await dialSize(page)).toEqual(before);
+  expect(await page.evaluate(() => document.scrollingElement.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+});
+
+test("tapping the suggestion puts it in the field, and Join sends it", async ({ page }) => {
+  const requests = await answerInsert(page, 201);
+  await page.goto("./");
+  await page.getByLabel("Email").fill("Name@Hotmial.com");
+  await page.getByLabel(/What do you collect\?/).click();
+  // Leaving the field is enough to see it.
+  await expect(byTestId(page, "waitlist.suggestion.fix")).toHaveText("name@hotmail.com");
+  await byTestId(page, "waitlist.suggestion.fix").click();
+  await expect(page.getByLabel("Email")).toHaveValue("name@hotmail.com");
+  await expect(page.getByLabel("Email")).toBeFocused();
+  await expect(byTestId(page, "waitlist.suggestion")).toBeHidden();
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toBeVisible();
+  expect(requests).toHaveLength(1);
+  expect(JSON.parse(requests[0].body).email).toBe("name@hotmail.com");
+});
+
+test("a second Join sends the address as typed (some domains are just unusual)", async ({ page }) => {
+  const requests = await answerInsert(page, 201);
+  await page.goto("./");
+  await page.getByLabel("Email").fill("name@gmial.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.suggestion")).toBeVisible();
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toBeVisible();
+  expect(requests).toHaveLength(1);
+  expect(JSON.parse(requests[0].body).email).toBe("name@gmial.com");
+});
+
+test("an ordinary address gets no suggestion", async ({ page }) => {
+  const requests = await answerInsert(page, 201);
+  await page.goto("./");
+  await page.getByLabel("Email").fill("collector@company.com");
+  await page.getByLabel(/What do you collect\?/).click();
+  await expect(byTestId(page, "waitlist.suggestion")).toBeHidden();
+  await expect(page.locator(".fineprint")).toBeVisible();
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toBeVisible();
+  expect(requests).toHaveLength(1);
+});
+
+test("the fine print says what we'll send, and Privacy opens the policy in a new tab", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator(".fineprint")).toHaveText("Beta and launch news only. Unsubscribe anytime.");
+  const privacy = page.getByRole("link", { name: "Privacy" });
+  await expect(privacy).toHaveAttribute("href", "https://jacob-gonsalves.github.io/loupe/privacy-policy");
+  await expect(privacy).toHaveAttribute("target", "_blank");
+  await expect(privacy).toHaveAttribute("rel", /noopener/);
+  // One line: it shares a 20px line with the error and the suggestion.
+  expect(await page.locator(".fineprint").evaluate((p) => p.getBoundingClientRect().height)).toBeLessThanOrEqual(20);
+});
+
+test("after joining, until the welcome email is live: the invite line", async ({ page }) => {
+  await answerInsert(page, 201);
+  await page.goto("./");
+  await page.getByLabel("Email").fill("collector@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toContainText("We'll email you when your invite is ready.");
+});
+
+test("after joining, once the welcome email is live: it names the address", async ({ page }) => {
+  await answerInsert(page, 201);
+  // config.js with the welcome email switched on.
+  await page.route("**/config.js*", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace("WELCOME_EMAIL_LIVE = false", "WELCOME_EMAIL_LIVE = true");
+    await route.fulfill({ response, body });
+  });
+  await page.goto("./");
+  await page.getByLabel("Email").fill("collector@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toContainText("We've sent a welcome email to collector@example.com.");
+});
+
 test("the copy never shows a beta date", async ({ page }) => {
   await page.goto("./");
   const text = await page.locator("body").innerText();
