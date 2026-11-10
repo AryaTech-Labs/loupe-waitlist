@@ -1,6 +1,9 @@
 // Vendored from AryaTech-Labs/loupe-web src/lib/guilloche.ts @ ca238d3 (transpiled with tsc). One change:
 // drawDial is split into drawDialFace + drawDialMovement (same drawing, same order), and
 // drawDialMovement can swing the balance wheel (by default it stands still, as in the app).
+// The tourbillon's balance is drawn larger than the app's (a rim of 4.7 units, not 2.2, with
+// weights and a hairspring) and the escape wheel sits at the cage's edge, as Hoover asked
+// for the waitlist; the app's own dial is unchanged.
 // The dial is the one on the app's Welcome screen; keep it in step with the app.
 import { drawFinish, withAlpha } from "./finish.js";
 const VIEWBOX = 100;
@@ -31,6 +34,34 @@ function offset(radius, degrees) {
 function circlePath(ctx, x, y, r) {
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
+}
+/** The balance's rim radius, in dial units (the cage's ring is 8). */
+const BALANCE_RIM = 4.7;
+const SPRING_INNER = 1.1;
+const SPRING_OUTER = 3.4;
+const SPRING_TURNS = 2.5;
+/**
+ * The hairspring at a swing of `swing` degrees: a flat spiral from the collet to its stud.
+ * Each point turns by the swing in proportion to how near the centre it is (all of it at the
+ * collet, none at the stud), so the coils open and close as a real balance spring does.
+ * Stroked in the current strokeStyle.
+ */
+function hairspring(ctx, swing) {
+    const steps = Math.ceil(SPRING_TURNS * 28);
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i++) {
+        const u = i / steps;
+        const r = SPRING_INNER + (SPRING_OUTER - SPRING_INNER) * u;
+        const deg = 90 + 360 * SPRING_TURNS * u + swing * (1 - u);
+        const [x, y] = offset(r, deg);
+        if (i === 0)
+            ctx.moveTo(x, y);
+        else
+            ctx.lineTo(x, y);
+    }
+    ctx.lineWidth = 0.16;
+    ctx.lineCap = "round";
+    ctx.stroke();
 }
 /**
  * Draws the dial into `ctx` at `size` CSS px. `drawsFinish` false leaves the
@@ -179,39 +210,57 @@ export function drawDialMovement(ctx, size, date, t, balance = [0]) {
         circlePath(ctx, x, y, 0.9);
         ctx.fill();
     }
-    // Escape wheel: twelve teeth.
+    // Escape wheel: twelve teeth, at the cage's edge between two arms, where its
+    // pinion meets the fixed seconds wheel. (Waitlist: moved out from under the balance.)
+    const [ex, ey] = offset(6.35, 60);
     ctx.beginPath();
     for (let tooth = 0; tooth < 12; tooth++) {
-        const outer = offset(3.5, tooth * 30);
-        const inner = offset(2.5, (tooth + 0.5) * 30);
+        const [ox, oy] = offset(1.2, tooth * 30);
+        const [ix, iy] = offset(0.85, (tooth + 0.5) * 30);
         if (tooth === 0)
-            ctx.moveTo(...outer);
+            ctx.moveTo(ex + ox, ey + oy);
         else
-            ctx.lineTo(...outer);
-        ctx.lineTo(...inner);
+            ctx.lineTo(ex + ox, ey + oy);
+        ctx.lineTo(ex + ix, ey + iy);
     }
     ctx.closePath();
-    ctx.lineWidth = 0.35;
+    ctx.lineWidth = 0.25;
     ctx.lineCap = "butt";
     ctx.strokeStyle = t.secondary;
     ctx.stroke();
-    // Balance wheel and spokes, centre jewel.
-    circlePath(ctx, 0, 0, 2.2);
-    ctx.lineWidth = 0.5;
+    // Balance wheel (waitlist: the cage's largest part, as on a real tourbillon): a rim with
+    // four timing weights, four arms, and the hairspring under them, whose inner end turns
+    // with the balance while its outer end stays pinned to the cage, so it breathes.
+    circlePath(ctx, 0, 0, BALANCE_RIM);
+    ctx.lineWidth = 0.7;
     ctx.strokeStyle = t.primary;
     ctx.stroke();
-    ctx.lineWidth = 0.35;
-    // Each exposure at an even share, so the spokes are 95% solid where they overlap (at the turn).
+    // Each exposure at an even share, so the parts are 95% solid where they overlap (at the turn).
     ctx.globalAlpha = balance.length === 1 ? 1 : 1 - Math.pow(0.05, 1 / balance.length);
     for (const swing of balance) {
+        ctx.strokeStyle = t.secondary;
+        hairspring(ctx, swing);
+        ctx.strokeStyle = t.primary;
+        ctx.fillStyle = t.primary;
+        ctx.lineWidth = 0.45;
+        ctx.lineCap = "round";
         ctx.beginPath();
         for (const deg of [45, 135, 225, 315]) {
-            ctx.moveTo(0, 0);
-            ctx.lineTo(...offset(2.2, deg + swing));
+            ctx.moveTo(...offset(0.9, deg + swing));
+            ctx.lineTo(...offset(BALANCE_RIM, deg + swing));
         }
         ctx.stroke();
+        for (const deg of [0, 90, 180, 270]) {
+            const [x, y] = offset(BALANCE_RIM, deg + swing);
+            circlePath(ctx, x, y, 0.45);
+            ctx.fill();
+        }
     }
     ctx.globalAlpha = 1;
+    // Collet, then the centre jewel.
+    circlePath(ctx, 0, 0, 0.9);
+    ctx.fillStyle = t.primary;
+    ctx.fill();
     circlePath(ctx, 0, 0, 0.6);
     ctx.fillStyle = t.error;
     ctx.fill();
