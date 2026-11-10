@@ -327,6 +327,87 @@ form[hidden],
   white-space: nowrap;
 }
 
+/* Motion: the page settles in, controls answer a press, the check draws
+   itself. All of it is off under Reduce Motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero,
+  .card {
+    animation: rise 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .card {
+    animation-delay: 90ms;
+  }
+  .footer {
+    animation: fade 520ms ease-out 180ms both;
+  }
+  input {
+    transition: border-color 150ms ease;
+  }
+  .primary {
+    transition:
+      transform 120ms ease,
+      filter 150ms ease,
+      opacity 150ms ease;
+  }
+  .primary:not(:disabled):active {
+    transform: scale(0.98);
+  }
+  .joined:not([hidden]) {
+    animation: fade 320ms ease-out both;
+  }
+  .joined:not([hidden]) .joined-icon circle {
+    stroke-dasharray: 63;
+    animation: draw 520ms cubic-bezier(0.65, 0, 0.35, 1) both;
+  }
+  .joined:not([hidden]) .joined-icon path {
+    stroke-dasharray: 12;
+    animation: draw 320ms ease-out 420ms both;
+  }
+}
+
+@media (hover: hover) {
+  .primary:not(:disabled):hover {
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: var(--draw-length, 63);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.joined-icon circle {
+  --draw-length: 63;
+}
+
+.joined-icon path {
+  --draw-length: 12;
+}
+
 /* Short phones (an SE with Safari's bars showing): drop the pitch, and leave
    room for the tagline to wrap where a browser sets the type a little wider. */
 @media (max-height: 600px) {
@@ -347,6 +428,11 @@ form[hidden],
   .page {
     justify-content: center;
     gap: var(--space-xl);
+  }
+  /* The footer's auto margin would take all the spare room; sharing it with
+     the hero centres the dial and form on the screen. */
+  .hero {
+    margin-top: auto;
   }
   .card {
     padding: var(--space-lg);
