@@ -21,6 +21,11 @@ export const RESIZE_SETTLE_MS = 80;
 /** How long the glide back to the top gets before the keyboard room goes. */
 export const CLOSE_MS = 450;
 
+/** Pinch-zoomed in (visualViewport.scale past 1, allowing for rounding). */
+export function isZoomed(scale) {
+  return typeof scale === "number" && scale > 1.01;
+}
+
 export function keyboardHeight(layoutHeight, visibleHeight) {
   const lost = Math.round(layoutHeight - visibleHeight);
   return lost >= KEYBOARD_MIN ? lost : 0;
@@ -88,6 +93,10 @@ export function keepFormAboveKeyboard({ page, form, action }) {
   };
 
   const align = () => {
+    // Pinch-zoom shrinks the visible area too, but it isn't a keyboard: while
+    // someone is zoomed in the page stays exactly as they left it, and it
+    // settles again once they're back at normal size.
+    if (isZoomed(viewport.scale)) return;
     // The room follows the keyboard itself, not focus: a tap on Join moves
     // focus first, and the button must not jump before the tap lands.
     const keyboard = keyboardHeight(window.innerHeight, viewport.height);

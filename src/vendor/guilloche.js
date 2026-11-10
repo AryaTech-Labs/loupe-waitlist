@@ -1,4 +1,5 @@
-// Vendored from AryaTech-Labs/loupe-web src/lib/guilloche.ts @ ca238d3 (transpiled with tsc, unchanged otherwise).
+// Vendored from AryaTech-Labs/loupe-web src/lib/guilloche.ts @ ca238d3 (transpiled with tsc). One change:
+// drawDial is split into drawDialFace + drawDialMovement (same drawing, same order).
 // The dial is the one on the app's Welcome screen; keep it in step with the app.
 import { drawFinish, withAlpha } from "./finish.js";
 const VIEWBOX = 100;
@@ -35,6 +36,16 @@ function circlePath(ctx, x, y, r) {
  * face flat (the Reduce Transparency / Increase Contrast fallback).
  */
 export function drawDial(ctx, size, date, t, drawsFinish, fonts) {
+    drawDialFace(ctx, size, date, t, drawsFinish, fonts);
+    drawDialMovement(ctx, size, date, t);
+}
+/**
+ * The parts of the dial that stand still for a day: case, finish, minute track,
+ * batons, day-date and brand line. Clears `ctx` first.
+ * (Waitlist split: drawDial = drawDialFace + drawDialMovement, same pixels, so a
+ * live dial can keep the face as an image and redraw only what moves.)
+ */
+export function drawDialFace(ctx, size, date, t, drawsFinish, fonts) {
     ctx.save();
     ctx.clearRect(0, 0, size, size);
     const s = size / VIEWBOX;
@@ -124,6 +135,13 @@ export function drawDial(ctx, size, date, t, drawsFinish, fonts) {
     ctx.fillText("LOUPE", C, 29.5);
     if ("letterSpacing" in ctx)
         ctx.letterSpacing = "0px";
+    ctx.restore();
+}
+/** The parts that move: the tourbillon (the seconds), the hands and the centre pin. Draws over the face. */
+export function drawDialMovement(ctx, size, date, t) {
+    ctx.save();
+    const s = size / VIEWBOX;
+    ctx.scale(s, s);
     const angles = handAngles(date);
     // Tourbillon at 6: the aperture, then the cage and escapement turned by the seconds.
     circlePath(ctx, C, 67, 10.4);
