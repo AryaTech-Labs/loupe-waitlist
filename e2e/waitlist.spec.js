@@ -207,6 +207,8 @@ test("with the keyboard up, the field being typed in and Join stay above it", as
 test("the background moves with the form as one piece and never redraws for a height change", async ({ page }) => {
   await fakeKeyboard(page);
   await page.goto("./");
+  // Let the page's entrance (the hero and card rising into place) finish first.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
   const stripes = byTestId(page, "waitlist.stripes");
   // A fingerprint of the drawing: its size and a column of pixels.
   const fingerprint = () =>
@@ -260,5 +262,48 @@ test.describe("dark mode", () => {
       card: getComputedStyle(document.querySelector(".card")).backgroundColor,
     }));
     expect(colors).toEqual({ body: "rgb(16, 18, 22)", card: "rgb(24, 27, 33)" });
+  });
+});
+
+test("the dial tells the device's time and the seconds hand beats", async ({ page }) => {
+  await page.goto("./");
+  const dial = byTestId(page, "waitlist.dial");
+  // Past the opening sweep, the drawn instant is the device clock's, on a beat.
+  await page.waitForTimeout(1300);
+  const first = await dial.evaluate((c) => ({ drawn: Number(c.dataset.time), now: Date.now() }));
+  expect(Math.abs(first.now - first.drawn)).toBeLessThan(400);
+  expect(first.drawn % 125).toBe(0);
+  // It keeps moving: a later read is a later beat.
+  await page.waitForTimeout(400);
+  const second = Number(await dial.evaluate((c) => c.dataset.time));
+  expect(second).toBeGreaterThan(first.drawn);
+});
+
+test("the dial follows the device's time zone", async ({ browser }) => {
+  for (const timezoneId of ["America/Chicago", "Asia/Tokyo"]) {
+    const context = await browser.newContext({ timezoneId });
+    const page = await context.newPage();
+    await page.goto("./");
+    const hours = await page.evaluate(async () => {
+      const { handAngles } = await import("./vendor/guilloche.js");
+      const drawn = new Date(Number(document.querySelector("[data-testid='waitlist.dial']").dataset.time));
+      return { local: drawn.getHours(), hourHand: handAngles(drawn).hour };
+    });
+    expect(Math.floor(hours.hourHand / 30)).toBe(hours.local % 12);
+    await context.close();
+  }
+});
+
+test.describe("with Reduce Motion", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("the dial holds still: one face a minute, no sweep", async ({ page }) => {
+    await page.goto("./");
+    const dial = byTestId(page, "waitlist.dial");
+    const first = Number(await dial.evaluate((c) => c.dataset.time));
+    await page.waitForTimeout(1200);
+    const later = Number(await dial.evaluate((c) => c.dataset.time));
+    expect(Date.now() - first).toBeLessThan(65_000);
+    // Not redrawn within the same minute.
+    if (Math.floor(first / 60_000) === Math.floor(Date.now() / 60_000)) expect(later).toBe(first);
   });
 });
