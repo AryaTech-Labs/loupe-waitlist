@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 const PORT = 4173;
 // SITE_URL runs the same tests against a deployed copy (Supabase is still
 // answered in the browser, so nothing is written), e.g.
-// SITE_URL=https://aryatech-labs.github.io/loupe-waitlist/ npm run test:e2e
+// SITE_URL=https://loupeweb.com/ npm run test:e2e
 const SITE_URL = process.env.SITE_URL;
 
 // Ad traffic is Meta Reels/Stories, so the phone layouts are the ones that

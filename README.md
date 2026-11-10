@@ -2,7 +2,7 @@
 
 The one-page teaser for the Loupe closed beta ([LOU-80](https://linear.app/arya-tech/issue/LOU-80/beta-waitlist-landing-page)). People leave an email, and optionally what they collect. Nothing else.
 
-**Live:** https://aryatech-labs.github.io/loupe-waitlist/ (loupe.com later, if we get it)
+**Live:** https://loupeweb.com (custom domain on GitHub Pages; DNS at Squarespace). After the beta this domain moves to the Loupe web app.
 
 This repo is temporary on purpose. When the beta waitlist closes, unpublish Pages (Settings → Pages) and archive or delete the repo; the main app (`AryaTech-Labs/loupe-web`) doesn't depend on it.
 
@@ -31,7 +31,7 @@ npm run test:e2e     # iPhone (WebKit) + Android (Chromium) browser tests
 The browser tests answer Supabase inside the browser, so they never write to the real waitlist. To run them against the live site instead of a local server:
 
 ```sh
-SITE_URL=https://aryatech-labs.github.io/loupe-waitlist/ npm run test:e2e
+SITE_URL=https://loupeweb.com/ npm run test:e2e
 ```
 
 ## Deploy
