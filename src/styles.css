@@ -123,13 +123,17 @@ body {
 }
 
 .page {
+  /* Phones space things a little tighter so the dial gets the room. */
+  --page-gap: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-md);
-  /* Exactly the visible screen, so there is nothing to scroll. */
+  gap: var(--page-gap);
+  /* Exactly the visible screen, so there is nothing to scroll. svh (the screen
+     with the browser's bars showing) keeps it, and so the dial, the same size
+     when the bars hide or the keyboard opens. */
   min-height: 100vh;
-  min-height: 100dvh;
+  min-height: 100svh;
   padding: max(var(--space-md), env(safe-area-inset-top)) max(var(--space-md), env(safe-area-inset-right))
     max(var(--space-md), env(safe-area-inset-bottom)) max(var(--space-md), env(safe-area-inset-left));
 }
@@ -138,6 +142,8 @@ body {
    (keyboard.js sets --keyboard to the keyboard's height). */
 .page.keyboard-open {
   padding-bottom: calc(var(--keyboard, 0px) + var(--space-md));
+  /* Grow by exactly the room added, so the dial keeps its size. */
+  min-height: calc(100svh + var(--keyboard, 0px) + var(--space-md) - max(var(--space-md), env(safe-area-inset-bottom)));
 }
 
 .hero {
@@ -149,11 +155,20 @@ body {
   text-align: center;
 }
 
-/* Scales with the screen's height (svh: steady while browser bars move). */
+/* Phones: the dial is the page's one flexible item. It takes the height the
+   screen has left once the words and form are in, from 96px up to 240px (or
+   62% of the width), so every phone shows it as large as fits on one screen.
+   Whatever it can't use is shared above it and above the footer. */
 .dial {
-  width: clamp(72px, 17svh, 200px);
-  height: clamp(72px, 17svh, 200px);
-  margin-bottom: var(--space-xs);
+  flex: 1 1 0;
+  min-height: 96px;
+  max-height: min(240px, 62vw);
+  min-width: 0;
+  width: auto;
+  aspect-ratio: 1 / 1;
+  margin-top: auto;
+  /* 8px to the eyebrow, whatever the page's gap. */
+  margin-bottom: calc(var(--space-sm) - var(--page-gap));
 }
 
 .eyebrow {
@@ -184,6 +199,10 @@ body {
 }
 
 .card {
+  /* A column, so "You're on the list" sits centred in the card's kept height. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   width: 100%;
   max-width: 24rem;
   padding: var(--space-md);
@@ -195,7 +214,7 @@ body {
 form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: 12px;
 }
 
 .field {
@@ -250,10 +269,14 @@ input[aria-invalid="true"] {
   overflow: hidden;
 }
 
+/* The error and the fine print share one 20px line, so swapping one for the
+   other never moves anything. */
 .error {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--was-error);
+  text-align: center;
 }
 
 .primary {
@@ -287,6 +310,7 @@ input[aria-invalid="true"] {
 .fineprint {
   margin: 0;
   font-size: 12px;
+  line-height: 20px;
   color: var(--was-secondary-text);
   text-align: center;
 }
@@ -347,6 +371,7 @@ form[hidden],
 /* Motion: the page settles in, controls answer a press, the check draws
    itself. All of it is off under Reduce Motion. */
 @media (prefers-reduced-motion: no-preference) {
+  .dial,
   .hero,
   .card {
     animation: rise 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -432,30 +457,29 @@ form[hidden],
     display: none;
   }
   .page {
-    gap: var(--space-sm);
+    --page-gap: var(--space-sm);
   }
   .dial {
-    width: clamp(64px, 12svh, 200px);
-    height: clamp(64px, 12svh, 200px);
+    min-height: 72px;
   }
 }
 
-/* Tablets and desktop: room to breathe. */
+/* Tablets and desktop: room to breathe, and a fixed 240px dial. Its auto
+   margin shares the spare room with the footer's, centring dial and form. */
 @media (min-width: 640px) and (min-height: 820px) {
   .page {
-    justify-content: center;
-    gap: var(--space-xl);
+    --page-gap: var(--space-xl);
   }
-  /* The footer's auto margin would take all the spare room; sharing it with
-     the hero centres the dial and form on the screen. */
-  .hero {
-    margin-top: auto;
+  form {
+    gap: var(--space-md);
   }
   .card {
     padding: var(--space-lg);
   }
   .dial {
+    flex: none;
     width: 240px;
     height: 240px;
+    max-height: none;
   }
 }

@@ -63,6 +63,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # Each deploy's scripts and stylesheet load only alongside each other,
+      # whatever a browser still has cached from the last one.
+      - name: Stamp this deploy's version on the page's scripts and styles
+        run: node scripts/stamp-version.mjs src "${GITHUB_SHA::12}"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: src

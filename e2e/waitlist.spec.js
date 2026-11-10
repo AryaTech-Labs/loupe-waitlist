@@ -122,12 +122,21 @@ test("the copy never shows a beta date", async ({ page }) => {
 
 // The page is exactly one screen on phones: nothing to scroll, nothing to drag.
 // Visible areas with the browser's bars showing, small to large.
+// `dial`: the least the dial gets there, since it takes all the spare height (up to
+// 240). It was 66, 113, 126 and 143 when sized by 17svh. Room for a line of text
+// that wraps on one system and not another (the SE's tagline does on Linux).
 const SCREENS = [
-  { name: "iPhone SE", width: 375, height: 548 },
-  { name: "iPhone 14", width: 390, height: 664 },
-  { name: "iPhone 15 Pro Max", width: 430, height: 740 },
-  { name: "Pixel 7", width: 412, height: 839 },
+  { name: "iPhone SE", width: 375, height: 548, dial: 96 },
+  { name: "iPhone 14", width: 390, height: 664, dial: 140 },
+  { name: "iPhone 15 Pro Max", width: 430, height: 740, dial: 210 },
+  { name: "Pixel 7", width: 412, height: 839, dial: 240 },
 ];
+
+const dialSize = (page) =>
+  byTestId(page, "waitlist.dial").evaluate((c) => {
+    const r = c.getBoundingClientRect();
+    return { width: Math.round(r.width), height: Math.round(r.height) };
+  });
 
 for (const screen of SCREENS) {
   test(`fits one screen with nothing to scroll: ${screen.name}`, async ({ page }) => {
@@ -135,18 +144,45 @@ for (const screen of SCREENS) {
     await page.goto("./");
     const fits = () => page.evaluate(() => document.scrollingElement.scrollHeight - window.innerHeight);
     expect(await fits()).toBeLessThanOrEqual(0);
+    // The dial is as large as fits, round, and drawn sharp at that size.
+    const dial = await dialSize(page);
+    expect(dial.width).toBe(dial.height);
+    expect(dial.height).toBeGreaterThanOrEqual(screen.dial);
+    expect(dial.height).toBeLessThanOrEqual(240);
+    await expect
+      .poll(() => byTestId(page, "waitlist.dial").evaluate((c) => c.width / (c.getBoundingClientRect().width * devicePixelRatio)))
+      .toBeCloseTo(1, 2);
     await expect(byTestId(page, "waitlist.submit")).toBeInViewport({ ratio: 1 });
     // No rubber-band bounce (where the browser supports turning it off; Safari 16+ and Chrome do).
     const overscroll = await page.evaluate(() =>
       CSS.supports("overscroll-behavior", "none") ? getComputedStyle(document.documentElement).overscrollBehaviorY : "none",
     );
     expect(overscroll).toBe("none");
-    // An error takes the fine print's place, so it still fits.
+    // An error takes the fine print's place, so it still fits and nothing moves.
     await byTestId(page, "waitlist.submit").click();
     await expect(byTestId(page, "waitlist.error")).toBeVisible();
     expect(await fits()).toBeLessThanOrEqual(0);
+    expect(await dialSize(page)).toEqual(dial);
   });
 }
+
+test("the dial keeps its size with the keyboard up and after joining", async ({ page }) => {
+  await fakeKeyboard(page);
+  await answerInsert(page, 201);
+  await page.goto("./");
+  const before = await dialSize(page);
+  await page.getByLabel("Email").click();
+  await page.evaluate((px) => window.__setKeyboard(px), KEYBOARD);
+  await expect(page.locator(".page")).toHaveClass(/keyboard-open/);
+  expect(await dialSize(page)).toEqual(before);
+  await page.getByLabel("Email").fill("collector@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toBeVisible();
+  await page.evaluate(() => document.activeElement.blur());
+  await page.evaluate(() => window.__setKeyboard(0));
+  await expect(page.locator(".page")).not.toHaveClass(/keyboard-open/);
+  expect(await dialSize(page)).toEqual(before);
+});
 
 // Browsers in tests have no on-screen keyboard, so this stands one in: it
 // shrinks visualViewport the way Safari and Chrome do when the keyboard opens.

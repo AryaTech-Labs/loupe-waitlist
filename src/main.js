@@ -29,6 +29,9 @@ function clearError() {
 }
 
 function showJoined() {
+  // The card keeps the form's height, so the dial above it doesn't jump.
+  const card = form.closest(".card");
+  card.style.minHeight = `${card.getBoundingClientRect().height}px`;
   form.hidden = true;
   joined.hidden = false;
   joined.focus();
