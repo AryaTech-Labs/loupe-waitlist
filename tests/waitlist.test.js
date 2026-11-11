@@ -69,8 +69,8 @@ describe("joinWaitlist", () => {
     expect(JSON.parse(init.body)).toEqual(row);
   });
 
-  it("treats an email already on the list (409) as joined", async () => {
-    await expect(joinWaitlist(row, opts(reply(409)))).resolves.toEqual({ status: "joined" });
+  it("treats an email already on the list (409) as joined, and says so", async () => {
+    await expect(joinWaitlist(row, opts(reply(409)))).resolves.toEqual({ status: "joined", alreadyJoined: true });
   });
 
   it.each([400, 401, 403, 404, 500])("fails on %i", async (status) => {

@@ -63,3 +63,10 @@ describe("joinedBody", () => {
     expect(joinedBody("a@b.co", false)).toBe("We'll email you when your invite is ready.");
   });
 });
+
+describe("joinedBody for someone already on the list (LOU-102 4.2)", () => {
+  it("never promises a welcome email, whatever Loops answered", () => {
+    expect(joinedBody("a@b.co", true, true)).toBe("You'd already joined. We'll email you when your invite is ready.");
+    expect(joinedBody("a@b.co", false, true)).toBe("You'd already joined. We'll email you when your invite is ready.");
+  });
+});

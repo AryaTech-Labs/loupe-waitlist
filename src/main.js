@@ -64,11 +64,11 @@ function offerSuggestion() {
   else hideSuggestion();
 }
 
-function showJoined(address, welcomeSent = false) {
+function showJoined(address, welcomeSent = false, alreadyJoined = false) {
   // The card keeps the form's height, so the dial above it doesn't jump.
   const card = form.closest(".card");
   card.style.minHeight = `${card.getBoundingClientRect().height}px`;
-  joinedBodyText.textContent = joinedBody(address, welcomeSent);
+  joinedBodyText.textContent = joinedBody(address, welcomeSent, alreadyJoined);
   form.hidden = true;
   joined.hidden = false;
   joined.focus();
@@ -109,7 +109,7 @@ form.addEventListener("submit", async (event) => {
   const welcomeSent =
     WELCOME_EMAIL_LIVE && (await addToMailingList(row, { formUrl: LOOPS_FORM_URL, listId: LOOPS_LIST_ID }));
   setBusy(false);
-  showJoined(row.email, welcomeSent);
+  showJoined(row.email, welcomeSent, result.alreadyJoined === true);
 });
 
 email.addEventListener("blur", (event) => {

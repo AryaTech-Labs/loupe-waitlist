@@ -237,6 +237,19 @@ test("after joining, the person goes to the Loops list and the card names the we
   });
 });
 
+// LOU-102 4.2: Loops sends the welcome when someone is added to the list —
+// once. Someone already on it gets no new email, whatever Loops answers, so
+// the card mustn't promise one.
+test("someone already on the list isn't promised a welcome email", async ({ page }) => {
+  await answerInsert(page, 409);
+  await answerLoops(page, 200, { success: true });
+  await page.goto("./");
+  await page.getByLabel("Email").fill("again@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toContainText("You'd already joined. We'll email you when your invite is ready.");
+  await expect(byTestId(page, "waitlist.joined")).not.toContainText("welcome email");
+});
+
 test("someone already on the list is still sent to Loops (it ignores repeats)", async ({ page }) => {
   await answerInsert(page, 409);
   const loops = await answerLoops(page);

@@ -130,7 +130,10 @@ export function suggestEmail(raw) {
 }
 
 /** What the card says once someone's on the list: the welcome email is named only once Loops took them. */
-export function joinedBody(email, welcomeSent) {
+export function joinedBody(email, welcomeSent, alreadyJoined = false) {
+  // Loops sends the welcome once, when someone is added to the list: someone
+  // already on it gets no new email, whatever the form post answers (LOU-102 4.2).
+  if (alreadyJoined) return "You'd already joined. We'll email you when your invite is ready.";
   return welcomeSent ? `We've sent a welcome email to ${email}.` : "We'll email you when your invite is ready.";
 }
 
@@ -207,7 +210,8 @@ export async function joinWaitlist(row, { supabaseUrl, anonKey, fetchImpl = glob
       gaveUp,
     ]);
     if (!response) return { status: "failed", code: 0, timedOut: true };
-    if (response.ok || response.status === 409) return { status: "joined" };
+    if (response.status === 409) return { status: "joined", alreadyJoined: true };
+    if (response.ok) return { status: "joined" };
     return { status: "failed", code: response.status };
   } catch {
     return timedOut ? { status: "failed", code: 0, timedOut: true } : { status: "failed", code: 0 };
