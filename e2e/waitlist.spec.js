@@ -31,13 +31,30 @@ async function answerInsert(page, status) {
 
 const byTestId = (page, id) => page.locator(`[data-testid="${id}"]`);
 
+// Requests that reached for the real Supabase because a test forgot to answer
+// them. They're aborted, and the test fails in afterEach.
+let unanswered = [];
+
 test.beforeEach(async ({ page }) => {
+  unanswered = [];
   page.on("pageerror", (error) => {
     throw error;
+  });
+  // Supabase is refused unless a test answers it (answerInsert registers later,
+  // and Playwright runs the latest matching route first). The suite also runs
+  // against the live site, where a real insert would put a row on the list
+  // and the waitlist-to-loops sync would email it.
+  await page.route(`${SUPABASE}/**`, (route) => {
+    unanswered.push(`${route.request().method()} ${route.request().url()}`);
+    return route.abort();
   });
   // Loops is answered in the browser too (a test can override this): no test,
   // here or against the live site, adds a real contact or sends a real email.
   await answerLoops(page);
+});
+
+test.afterEach(() => {
+  expect(unanswered, "requests to the real Supabase: answer them with answerInsert").toEqual([]);
 });
 
 test("the phone layout: dial, wordmark, form, nothing wider than the screen", async ({ page }) => {
