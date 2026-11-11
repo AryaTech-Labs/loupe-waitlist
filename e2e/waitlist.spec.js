@@ -277,6 +277,22 @@ for (const [name, status, body] of [
   });
 }
 
+// LOU-102 4.3: a refusal says what the person can do, not "try again".
+for (const [status, message] of [
+  [400, "We couldn't add that address. Check it and try again."],
+  [403, "Sign-ups are paused for a moment. Please try again later."],
+  [429, "Too many tries. Please wait a minute and try again."],
+]) {
+  test(`a ${status} from the server says what to do`, async ({ page }) => {
+    await answerInsert(page, status);
+    await page.goto("./");
+    await page.getByLabel("Email").fill("someone@example.com");
+    await byTestId(page, "waitlist.submit").click();
+    await expect(byTestId(page, "waitlist.error")).toHaveText(message);
+    await expect(byTestId(page, "waitlist.submit")).toBeEnabled();
+  });
+}
+
 // LOU-102 4.1: a request that never answers (captive portal, dropped link)
 // gives the form back with a message, instead of "Joining…" for a minute+.
 test("a stalled sign-up gives the form back after 10 seconds", async ({ page }) => {

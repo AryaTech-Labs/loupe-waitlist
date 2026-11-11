@@ -12,12 +12,24 @@ export const MESSAGES = {
   failed: "Couldn't join the list. Please try again.",
   offline: "You're offline. Check your connection and try again.",
   slow: "This is taking too long. Check your connection and try again.",
+  refused: "We couldn't add that address. Check it and try again.",
+  unavailable: "Sign-ups are paused for a moment. Please try again later.",
+  rateLimited: "Too many tries. Please wait a minute and try again.",
 };
 
-/** What to tell someone whose sign-up didn't go through (LOU-102 4.1). */
+/**
+ * What to tell someone whose sign-up didn't go through (LOU-102 4.1, 4.3),
+ * by what they can do about it. PostgREST answers a refused CHECK with 400,
+ * RLS or a bad key with 401/403, a missing table with 404; the gateway's
+ * rate limit is 429. Only a 5xx or no answer is worth an immediate retry.
+ */
 export function failureMessage(result, { online = true } = {}) {
   if (!online) return MESSAGES.offline;
   if (result?.timedOut) return MESSAGES.slow;
+  const code = result?.code ?? 0;
+  if (code === 400 || code === 422) return MESSAGES.refused;
+  if (code === 401 || code === 403 || code === 404) return MESSAGES.unavailable;
+  if (code === 429) return MESSAGES.rateLimited;
   return MESSAGES.failed;
 }
 

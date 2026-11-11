@@ -120,8 +120,28 @@ describe("failureMessage (LOU-102 4.1)", () => {
   it("a request that timed out says it's taking too long", () => {
     expect(failureMessage({ status: "failed", code: 0, timedOut: true })).toBe(MESSAGES.slow);
   });
-  it("anything else is the plain failure", () => {
+  it("a server error or no answer is the plain failure (trying again can work)", () => {
     expect(failureMessage({ status: "failed", code: 0 })).toBe(MESSAGES.failed);
     expect(failureMessage({ status: "failed", code: 500 })).toBe(MESSAGES.failed);
+    expect(failureMessage({ status: "failed", code: 503 })).toBe(MESSAGES.failed);
+  });
+});
+
+// LOU-102 4.3: a 4xx is not "try again" — retrying the same thing can't work.
+describe("failureMessage for a refused sign-up", () => {
+  it("400 / 422: the address was refused (a server check), so check it", () => {
+    expect(failureMessage({ status: "failed", code: 400 })).toBe(MESSAGES.refused);
+    expect(failureMessage({ status: "failed", code: 422 })).toBe(MESSAGES.refused);
+  });
+  it("401 / 403 / 404: our side isn't taking sign-ups right now", () => {
+    for (const code of [401, 403, 404]) expect(failureMessage({ status: "failed", code })).toBe(MESSAGES.unavailable);
+  });
+  it("429: wait, then try again", () => {
+    expect(failureMessage({ status: "failed", code: 429 })).toBe(MESSAGES.rateLimited);
+  });
+  it("the messages are distinct", () => {
+    const all = [MESSAGES.failed, MESSAGES.refused, MESSAGES.unavailable, MESSAGES.rateLimited, MESSAGES.offline, MESSAGES.slow];
+    expect(new Set(all).size).toBe(all.length);
+    for (const message of all) expect(message).toBeTruthy();
   });
 });
