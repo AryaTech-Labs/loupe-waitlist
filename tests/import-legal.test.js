@@ -59,6 +59,12 @@ describe("the legal import keeps plain document markup only", () => {
     expect(sanitize("<p>a <foo>b</foo> < c</p>")).toBe("<p>a b &lt; c</p>");
   });
 
+  it("an unterminated tag at the end of the page becomes text, never a live tag", () => {
+    const out = sanitize('<p>fine</p>\n<p onmouseover="steal()" class="x');
+    expect(out).toBe('<p>fine</p>\n&lt;p onmouseover="steal()" class="x');
+    expect(sanitize("<p>a</p><a href=\"https://x.example\" onclick=\"y()\"")).not.toMatch(/<a /);
+  });
+
   it("finds the document inside the original page's card", () => {
     const page = '<html><body><nav>x</nav><div class="card">\n<h1>T</h1>\n</div>\n</body></html>';
     expect(extractCard(page).trim()).toBe("<h1>T</h1>");

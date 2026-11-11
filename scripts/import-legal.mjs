@@ -97,8 +97,14 @@ export function sanitize(html) {
     if (name === "p" && /\bclass\s*=\s*"meta"/i.test(attrs)) return '<p class="meta">';
     return `<${name}>`;
   });
-  // Anything that still looks like markup isn't ours: show it as text.
-  s = s.replace(/<(?!\/?(?:h1|h2|h3|p|ul|ol|li|strong|em|b|i|a|br)\b)/gi, "&lt;");
+  // Everything above emits tags in exactly these forms. Any other "<" (an
+  // unterminated tag at the end of the page, a stray attribute, anything
+  // unexpected) is shown as text.
+  const canonical = /<(?:\/?(?:h1|h2|h3|p|ul|ol|li|strong|em|b|i|a)>|br \/>|p class="meta">|a href="[^"<>]*"(?: rel="noopener noreferrer")?>)/y;
+  s = s.replace(/</g, (match, offset) => {
+    canonical.lastIndex = offset;
+    return canonical.test(s) ? match : "&lt;";
+  });
   return s
     .split("\n")
     .map((line) => line.trimEnd())
