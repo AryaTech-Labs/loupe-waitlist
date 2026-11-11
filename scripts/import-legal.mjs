@@ -75,7 +75,7 @@ const escapeAttr = (s) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").repla
  */
 export function sanitize(html) {
   let s = removeAll(html, /<!--[\s\S]*?-->/g);
-  s = removeAll(s, /<(script|style|iframe|object|embed|template|svg|math|noscript)\b[\s\S]*?<\/\1\s*>/gi);
+  s = removeAll(s, /<(script|style|iframe|object|embed|template|svg|math|noscript)\b[\s\S]*?<\/\1\b[^>]*>/gi);
   s = removeAll(s, /<\/?(script|style|iframe|object|embed|template|svg|math|noscript)\b[^>]*>/gi);
   s = removeAll(s, /<!--|-->/g);
   const linkOpen = [];

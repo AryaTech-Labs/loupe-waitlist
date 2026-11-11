@@ -24,6 +24,9 @@ describe("the legal import keeps plain document markup only", () => {
       "<!<!--- comment --->>",
       "<sc<!-- -->ript>alert(1)</script>",
       "<p>ok<scr<style></style>ipt src=//evil></script></p>",
+      "<script>alert(1)</script foo='bar'>",
+      "<SCRIPT>alert(1)</SCRIPT\n>",
+      "<style>p{}</style\t>",
     ]) {
       const out = sanitize(trick);
       expect(out).not.toMatch(/<\s*script/i);
