@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildRow, COLLECTS_MAX, isValidEmail, joinWaitlist, MESSAGES, normalizeEmail, validate } from "../src/waitlist.js";
+import {
+  buildRow,
+  COLLECTS_MAX,
+  failureMessage,
+  isValidEmail,
+  joinWaitlist,
+  MESSAGES,
+  normalizeEmail,
+  validate,
+} from "../src/waitlist.js";
 
 const opts = (fetchImpl) => ({ supabaseUrl: "https://ref.supabase.co", anonKey: "anon-key", fetchImpl });
 const reply = (status) => vi.fn().mockResolvedValue({ ok: status >= 200 && status < 300, status });
@@ -71,5 +80,48 @@ describe("joinWaitlist", () => {
   it("fails, without throwing, when the network does", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
     await expect(joinWaitlist(row, opts(fetchImpl))).resolves.toEqual({ status: "failed", code: 0 });
+  });
+
+  // LOU-102 4.1: a stalled connection (captive portal, a dropped mobile
+  // link) must not leave the button on "Joining…" for a minute or more.
+  it("gives up on a request that never answers, and aborts it", async () => {
+    let signal;
+    const fetchImpl = vi.fn((_url, init) => {
+      signal = init.signal;
+      return new Promise(() => {}); // never settles
+    });
+    await expect(joinWaitlist(row, { ...opts(fetchImpl), timeoutMs: 20 })).resolves.toEqual({
+      status: "failed",
+      code: 0,
+      timedOut: true,
+    });
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("waits 10 seconds by default", async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn(() => new Promise(() => {}));
+    const result = joinWaitlist(row, opts(fetchImpl));
+    let settled = false;
+    result.then(() => (settled = true));
+    await vi.advanceTimersByTimeAsync(9_900);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(settled).toBe(true);
+    vi.useRealTimers();
+  });
+});
+
+describe("failureMessage (LOU-102 4.1)", () => {
+  it("offline says so", () => {
+    expect(failureMessage(null, { online: false })).toBe(MESSAGES.offline);
+    expect(failureMessage({ status: "failed", code: 0 }, { online: false })).toBe(MESSAGES.offline);
+  });
+  it("a request that timed out says it's taking too long", () => {
+    expect(failureMessage({ status: "failed", code: 0, timedOut: true })).toBe(MESSAGES.slow);
+  });
+  it("anything else is the plain failure", () => {
+    expect(failureMessage({ status: "failed", code: 0 })).toBe(MESSAGES.failed);
+    expect(failureMessage({ status: "failed", code: 500 })).toBe(MESSAGES.failed);
   });
 });

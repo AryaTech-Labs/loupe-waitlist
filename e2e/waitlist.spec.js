@@ -264,6 +264,33 @@ for (const [name, status, body] of [
   });
 }
 
+// LOU-102 4.1: a request that never answers (captive portal, dropped link)
+// gives the form back with a message, instead of "Joining…" for a minute+.
+test("a stalled sign-up gives the form back after 10 seconds", async ({ page }) => {
+  await page.clock.install();
+  await page.route(`${SUPABASE}/**`, () => {}); // never answers
+  await page.goto("./");
+  await page.getByLabel("Email").fill("someone@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.submit")).toBeDisabled();
+  await page.clock.fastForward(10_500);
+  await expect(byTestId(page, "waitlist.error")).toHaveText("This is taking too long. Check your connection and try again.");
+  await expect(byTestId(page, "waitlist.submit")).toBeEnabled();
+  await expect(byTestId(page, "waitlist.joined")).toBeHidden();
+});
+
+test("offline: says so, sends nothing, keeps the form", async ({ page, context }) => {
+  const inserts = await answerInsert(page, 201);
+  await page.goto("./");
+  await page.getByLabel("Email").fill("someone@example.com");
+  await context.setOffline(true);
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.error")).toHaveText("You're offline. Check your connection and try again.");
+  await expect(byTestId(page, "waitlist.submit")).toBeEnabled();
+  expect(inserts).toHaveLength(0);
+  await context.setOffline(false);
+});
+
 test("a Supabase failure never reaches Loops", async ({ page }) => {
   await answerInsert(page, 500);
   const loops = await answerLoops(page);

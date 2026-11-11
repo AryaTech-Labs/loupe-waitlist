@@ -2,10 +2,10 @@ import { LOOPS_FORM_URL, LOOPS_LIST_ID, SUPABASE_ANON_KEY, SUPABASE_URL, WELCOME
 import {
   addToMailingList,
   buildRow,
+  failureMessage,
   isValidEmail,
   joinedBody,
   joinWaitlist,
-  MESSAGES,
   normalizeEmail,
   suggestEmail,
   validate,
@@ -96,11 +96,13 @@ form.addEventListener("submit", async (event) => {
     return;
   }
   hideSuggestion();
+  // Offline: nothing to send, and saying so beats a generic failure.
+  if (navigator.onLine === false) return showError("email", failureMessage(null, { online: false }));
   setBusy(true);
   const result = await joinWaitlist(row, { supabaseUrl: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY });
   if (result.status !== "joined") {
     setBusy(false);
-    return showError("email", MESSAGES.failed);
+    return showError("email", failureMessage(result, { online: navigator.onLine !== false }));
   }
   // On the list. Now the mailing list, which sends the welcome email; the card
   // only promises that email when Loops took them.

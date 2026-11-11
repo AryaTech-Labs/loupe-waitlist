@@ -10,7 +10,16 @@ export const MESSAGES = {
   invalidEmail: "Enter a valid email address.",
   collectsTooLong: `Keep it under ${COLLECTS_MAX} characters.`,
   failed: "Couldn't join the list. Please try again.",
+  offline: "You're offline. Check your connection and try again.",
+  slow: "This is taking too long. Check your connection and try again.",
 };
+
+/** What to tell someone whose sign-up didn't go through (LOU-102 4.1). */
+export function failureMessage(result, { online = true } = {}) {
+  if (!online) return MESSAGES.offline;
+  if (result?.timedOut) return MESSAGES.slow;
+  return MESSAGES.failed;
+}
 
 /** Trimmed and lowercased, so one person is one row however they type it. */
 export function normalizeEmail(raw) {
@@ -169,23 +178,40 @@ export function validate(row) {
 /**
  * Adds the row. Resolves to { status: "joined" } or { status: "failed" };
  * never throws. 409 (unique violation) is someone already on the list.
+ * Gives up after `timeoutMs` (a stalled connection would otherwise leave the
+ * button on "Joining…" for a minute or more), as { timedOut: true }.
  */
-export async function joinWaitlist(row, { supabaseUrl, anonKey, fetchImpl = globalThis.fetch }) {
+export async function joinWaitlist(row, { supabaseUrl, anonKey, fetchImpl = globalThis.fetch, timeoutMs = 10_000 }) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  // A fetch that ignores the signal still can't hold the form past the timeout.
+  const gaveUp = new Promise((resolve) => controller.signal.addEventListener("abort", () => resolve(null)));
   try {
-    const response = await fetchImpl(`${supabaseUrl}/rest/v1/waitlist`, {
-      method: "POST",
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-        "Content-Type": "application/json",
-        // Anon can't read the table, so ask for nothing back.
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify(row),
-    });
+    const response = await Promise.race([
+      fetchImpl(`${supabaseUrl}/rest/v1/waitlist`, {
+        method: "POST",
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          "Content-Type": "application/json",
+          // Anon can't read the table, so ask for nothing back.
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify(row),
+        signal: controller.signal,
+      }),
+      gaveUp,
+    ]);
+    if (!response) return { status: "failed", code: 0, timedOut: true };
     if (response.ok || response.status === 409) return { status: "joined" };
     return { status: "failed", code: response.status };
   } catch {
-    return { status: "failed", code: 0 };
+    return timedOut ? { status: "failed", code: 0, timedOut: true } : { status: "failed", code: 0 };
+  } finally {
+    clearTimeout(timer);
   }
 }
