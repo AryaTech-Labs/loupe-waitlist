@@ -47,7 +47,7 @@ for (const page of pages) {
   const connect = directive("connect-src")?.split(/\s+/).slice(1) ?? [];
   for (const origin of connect) if (!CONNECT_ALLOWED.has(origin)) failures.push(`${page}: CSP connect-src allows ${origin}`);
   if (/<script(?![^>]*\bsrc=)[^>]*>/i.test(source)) failures.push(`${page}: inline <script>`);
-  if (/\son[a-z]+\s*=/i.test(source.replace(/<!--[\s\S]*?-->/g, ""))) failures.push(`${page}: inline event handler`);
+  if (/\son[a-z]+\s*=/i.test(source)) failures.push(`${page}: inline event handler`);
   if (page !== "index.html" && /<script/i.test(source)) failures.push(`${page}: legal pages carry no script`);
 }
 

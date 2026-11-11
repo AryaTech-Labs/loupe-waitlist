@@ -17,6 +17,21 @@ describe("the legal import keeps plain document markup only", () => {
     expect(out).not.toMatch(/script|onerror|onload|onclick|iframe|svg|img/i);
   });
 
+  it("can't be tricked by tags split around other tags or comments", () => {
+    for (const trick of [
+      "<scr<script>x</script>ipt>alert(1)</script>",
+      "<<script>script>alert(1)<</script>/script>",
+      "<!<!--- comment --->>",
+      "<sc<!-- -->ript>alert(1)</script>",
+      "<p>ok<scr<style></style>ipt src=//evil></script></p>",
+    ]) {
+      const out = sanitize(trick);
+      expect(out).not.toMatch(/<\s*script/i);
+      expect(out).not.toMatch(/<!--/);
+      expect(out).not.toMatch(/<(?!\/?(h1|h2|h3|p|ul|ol|li|strong|em|b|i|a|br)\b)/i);
+    }
+  });
+
   it("keeps only https:, mailto: and our own page links", () => {
     expect(safeHref("privacy-policy.html")).toBe("../privacy/");
     expect(safeHref("terms-of-service.html")).toBe("../terms/");

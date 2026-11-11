@@ -55,6 +55,17 @@ export function safeHref(raw) {
   return null;
 }
 
+/** Removes every match of `pattern`, again and again until none is left (no "<scr<script>ipt>" tricks). */
+function removeAll(text, pattern) {
+  let previous;
+  let current = text;
+  do {
+    previous = current;
+    current = current.replace(pattern, "");
+  } while (current !== previous);
+  return current;
+}
+
 const escapeAttr = (s) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
 /**
@@ -63,10 +74,10 @@ const escapeAttr = (s) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").repla
  * class="meta" on the effective-date line.
  */
 export function sanitize(html) {
-  let s = html
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<(script|style|iframe|object|embed|template|svg|math|noscript)\b[\s\S]*?<\/\1\s*>/gi, "")
-    .replace(/<(script|style|iframe|object|embed|template|svg|math|noscript)\b[^>]*\/?>/gi, "");
+  let s = removeAll(html, /<!--[\s\S]*?-->/g);
+  s = removeAll(s, /<(script|style|iframe|object|embed|template|svg|math|noscript)\b[\s\S]*?<\/\1\s*>/gi);
+  s = removeAll(s, /<\/?(script|style|iframe|object|embed|template|svg|math|noscript)\b[^>]*>/gi);
+  s = removeAll(s, /<!--|-->/g);
   const linkOpen = [];
   s = s.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g, (_m, slash, rawName, attrs) => {
     const name = rawName.toLowerCase();
