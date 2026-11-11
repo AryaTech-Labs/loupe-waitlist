@@ -188,13 +188,12 @@ test("an ordinary address gets no suggestion", async ({ page }) => {
   expect(requests).toHaveLength(1);
 });
 
-test("the fine print says what we'll send, and Privacy opens the policy in a new tab", async ({ page }) => {
+test("the fine print says what we'll send, and Privacy is loupeweb.com's own page", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator(".fineprint")).toHaveText("Beta and launch news only. Unsubscribe anytime.");
   const privacy = page.getByRole("link", { name: "Privacy" });
-  await expect(privacy).toHaveAttribute("href", "https://jacob-gonsalves.github.io/loupe/privacy-policy");
-  await expect(privacy).toHaveAttribute("target", "_blank");
-  await expect(privacy).toHaveAttribute("rel", /noopener/);
+  await expect(privacy).toHaveAttribute("href", "privacy/");
+  await expect(privacy).not.toHaveAttribute("target", /.+/);
   // One line: it shares a 20px line with the error and the suggestion.
   expect(await page.locator(".fineprint").evaluate((p) => p.getBoundingClientRect().height)).toBeLessThanOrEqual(20);
 });
@@ -608,4 +607,58 @@ test.describe("with Reduce Motion", () => {
     // Not redrawn within the same minute.
     if (Math.floor(first / 60_000) === Math.floor(Date.now() / 60_000)) expect(later).toBe(first);
   });
+});
+
+for (const [slug, heading] of [
+  ["privacy", "Privacy Policy"],
+  ["terms", "Terms of Service"],
+  ["community-guidelines", "Community Guidelines"],
+]) {
+  test(`loupeweb.com/${slug}/ shows the ${heading}, with no script and nothing blocked`, async ({ page }) => {
+    const problems = [];
+    page.on("console", (m) => m.type() === "error" && problems.push(m.text()));
+    await page.goto(`./${slug}/`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
+    await expect(page.locator(`[data-testid="legal.${slug}"]`)).toContainText("Arya Tech Inc.");
+    expect(await page.locator("script").count()).toBe(0);
+    await expect(page.locator(".legal-nav").getByRole("link", { name: heading })).toHaveAttribute("aria-current", "page");
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    expect(problems).toEqual([]);
+  });
+}
+
+test("the footer's Privacy link opens loupeweb.com/privacy/", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("link", { name: "Privacy" }).click();
+  await expect(page).toHaveURL(/\/privacy\/$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Privacy Policy");
+});
+
+test("framed by another site, the page hides its form and offers to open Loupe", async ({ page }, testInfo) => {
+  const site = new URL("./", testInfo.project.use.baseURL).href;
+  const framing = `<!doctype html><iframe src="${site}" width="400" height="800"></iframe>`;
+  const local = new URL(site);
+  if (local.hostname === "localhost") {
+    // Another real origin on this machine (127.0.0.1, not localhost): Chrome
+    // only lets a local page frame localhost, and an https page can't frame http.
+    // (A missing page: our real pages' Trusted Types would refuse the write.)
+    local.hostname = "127.0.0.1";
+    await page.goto(new URL("not-a-page", local).href);
+    await page.setContent(framing);
+  } else {
+    // Against the live site: any other website framing https://loupeweb.com.
+    await page.route("https://attacker.example/**", (route) => route.fulfill({ contentType: "text/html", body: framing }));
+    await page.goto("https://attacker.example/");
+  }
+  const frame = page.frameLocator("iframe");
+  await expect(frame.locator('[data-testid="waitlist.framed"]')).toBeVisible();
+  await expect(frame.locator('[data-testid="waitlist.framed"]')).toHaveAttribute("target", "_top");
+  await expect(frame.locator('[data-testid="waitlist.form"]')).toBeHidden();
+});
+
+test("not framed, the open-Loupe link never shows", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.locator('[data-testid="waitlist.framed"]')).toHaveCount(0);
+  await expect(byTestId(page, "waitlist.form")).toBeVisible();
 });

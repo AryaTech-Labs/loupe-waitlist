@@ -1,0 +1,18 @@
+# Keeps the pinned GitHub Actions (CI uses commit SHAs) and the dev
+# dependencies patched. Each update is a PR that must pass CI before merging.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        patterns: ["*"]
