@@ -74,10 +74,11 @@ const escapeAttr = (s) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").repla
  * class="meta" on the effective-date line.
  */
 export function sanitize(html) {
-  let s = removeAll(html, /<!--[\s\S]*?-->/g);
+  // A comment ends at "-->" or "--!>" (both, per the HTML spec).
+  let s = removeAll(html, /<!--[\s\S]*?--!?>/g);
   s = removeAll(s, /<(script|style|iframe|object|embed|template|svg|math|noscript)\b[\s\S]*?<\/\1\b[^>]*>/gi);
   s = removeAll(s, /<\/?(script|style|iframe|object|embed|template|svg|math|noscript)\b[^>]*>/gi);
-  s = removeAll(s, /<!--|-->/g);
+  s = removeAll(s, /<!--|--!?>/g);
   const linkOpen = [];
   s = s.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g, (_m, slash, rawName, attrs) => {
     const name = rawName.toLowerCase();
