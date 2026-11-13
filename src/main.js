@@ -16,7 +16,7 @@ import { keepFormAboveKeyboard } from "./keyboard.js";
 const form = document.querySelector("[data-testid='waitlist.form']");
 const email = form.querySelector("#email");
 const collects = form.querySelector("#collects");
-const honeypot = form.querySelector("#website");
+const honeypot = form.querySelector("#loupe-trap");
 const submit = form.querySelector("[data-testid='waitlist.submit']");
 const error = form.querySelector("[data-testid='waitlist.error']");
 const suggestion = form.querySelector("[data-testid='waitlist.suggestion']");

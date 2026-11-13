@@ -69,7 +69,7 @@ test("the phone layout: dial, wordmark, form, nothing wider than the screen", as
   // Someone arriving from an ad can join without scrolling.
   await expect(byTestId(page, "waitlist.submit")).toBeInViewport({ ratio: 1 });
   // The bot trap is never something a person can reach.
-  await expect(page.locator("#website")).not.toBeInViewport();
+  await expect(page.locator('[data-testid="waitlist.trap"]')).not.toBeInViewport();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
@@ -141,11 +141,31 @@ test("a bot that fills the hidden field sees success and sends nothing", async (
   const loops = await answerLoops(page);
   await page.goto("./");
   await page.getByLabel("Email").fill("bot@example.com");
-  await page.locator("#website").fill("https://spam.example", { force: true });
+  await page.locator('[data-testid="waitlist.trap"]').fill("https://spam.example", { force: true });
   await byTestId(page, "waitlist.submit").click();
   await expect(byTestId(page, "waitlist.joined")).toBeVisible();
   expect(requests).toHaveLength(0);
   expect(loops).toHaveLength(0);
+});
+
+// LOU-102 4.6: password managers and form-fill profiles fill fields by
+// name and label (a "Website" field gets an identity's URL). A person whose
+// manager filled the trap would get a fake success and never join. The trap
+// carries nothing autofill recognises; bots still fill every field.
+test("the bot trap has nothing a password manager would fill", async ({ page }) => {
+  await page.goto("./");
+  const trap = page.locator('[data-testid="waitlist.trap"]');
+  const attrs = await trap.evaluate((el) => ({
+    name: el.getAttribute("name"),
+    id: el.id,
+    label: el.labels?.[0]?.textContent ?? "",
+    autocomplete: el.getAttribute("autocomplete"),
+    tabindex: el.getAttribute("tabindex"),
+  }));
+  const autofillWords = /url|web|site|name|mail|company|org|address|phone|tel|city|zip|post|user|login/i;
+  for (const value of [attrs.name, attrs.id, attrs.label]) expect(value).not.toMatch(autofillWords);
+  expect(attrs.autocomplete).toBe("off");
+  expect(attrs.tabindex).toBe("-1");
 });
 
 test("a likely typo gets a 'Did you mean' on the first Join, sends nothing, and moves nothing", async ({ page }) => {
