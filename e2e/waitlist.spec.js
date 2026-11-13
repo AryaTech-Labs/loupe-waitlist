@@ -781,3 +781,28 @@ test("not framed, the open-Loupe link never shows", async ({ page }) => {
   await expect(page.locator('[data-testid="waitlist.framed"]')).toHaveCount(0);
   await expect(byTestId(page, "waitlist.form")).toBeVisible();
 });
+
+// LOU-102 4.7 (audit claim checked): the dial writes its data-time stamp once
+// per beat (8 a second), not once per frame — the write is guarded.
+test("the dial's time stamp changes per beat, not per frame", async ({ page }) => {
+  await page.goto("./");
+  await expect(byTestId(page, "waitlist.dial")).toBeVisible();
+  const { writes, frames } = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const canvas = document.querySelector('[data-testid="waitlist.dial"]');
+        let writes = 0;
+        let frames = 0;
+        new MutationObserver((list) => (writes += list.length)).observe(canvas, { attributeFilter: ["data-time"] });
+        const tick = () => {
+          frames += 1;
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        setTimeout(() => resolve({ writes, frames }), 2000);
+      }),
+  );
+  expect(writes).toBeGreaterThan(0); // the dial is running
+  expect(writes).toBeLessThanOrEqual(2 * 8 + 2); // per beat
+  expect(frames).toBeGreaterThan(writes * 2); // far fewer writes than frames
+});
