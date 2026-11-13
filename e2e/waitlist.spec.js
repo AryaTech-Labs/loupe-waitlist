@@ -277,6 +277,32 @@ for (const [name, status, body] of [
   });
 }
 
+// LOU-102 4.5: a keyboard user can always see which field has focus —
+// including in forced-colors mode (Windows High Contrast), which replaces
+// author colours: there the old cue (a 1px border colour change) became
+// black → very dark navy, practically invisible. A real ring (an outline
+// of 2px or more, which forced colours keep in a system colour) is required.
+for (const forcedColors of ["none", "active"]) {
+  test(`the focused field gets a visible ring (forced colors: ${forcedColors})`, async ({ page, browserName }) => {
+    test.skip(forcedColors === "active" && browserName !== "chromium", "forced-colors emulation is Chromium-only");
+    await page.emulateMedia({ forcedColors, reducedMotion: "reduce" });
+    await page.goto("./");
+    for (const label of ["Email", /What do you collect\?/]) {
+      const field = page.getByLabel(label);
+      await field.focus();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Tab"); // keyboard focus, so :focus-visible applies
+      await expect(field).toBeFocused();
+      const ring = await field.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { style: s.outlineStyle, width: parseFloat(s.outlineWidth) };
+      });
+      expect(ring.style).not.toBe("none");
+      expect(ring.width).toBeGreaterThanOrEqual(2);
+    }
+  });
+}
+
 // LOU-102 4.3: a refusal says what the person can do, not "try again".
 for (const [status, message] of [
   [400, "We couldn't add that address. Check it and try again."],
