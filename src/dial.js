@@ -223,12 +223,6 @@ export function startDial(canvas, { amplitude = BALANCE_AMPLITUDE } = {}) {
   reduceMotion.addEventListener("change", run);
   reduceTransparency.addEventListener("change", refresh);
   moreContrast.addEventListener("change", refresh);
-  return {
-    /** A new swing, from the next frame. */
-    setAmplitude(degrees) {
-      amplitude = degrees;
-    },
-  };
 }
 
 /**
