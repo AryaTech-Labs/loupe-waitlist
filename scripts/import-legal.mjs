@@ -68,6 +68,24 @@ function removeAll(text, pattern) {
 
 const escapeAttr = (s) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
+/** An attribute value as the browser reads it (so escaping it once is right). */
+function decodeEntities(s) {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|amp|quot|apos|lt|gt);/gi, (match, entity) => {
+    const e = entity.toLowerCase();
+    if (e === "amp") return "&";
+    if (e === "quot") return '"';
+    if (e === "apos") return "'";
+    if (e === "lt") return "<";
+    if (e === "gt") return ">";
+    const code = e.startsWith("#x") ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+    return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+  });
+}
+
+// Tags that hold paragraph-level content: opening another block closes them.
+const PARAGRAPHS = new Set(["p", "h1", "h2", "h3"]);
+const BLOCKS = new Set(["p", "h1", "h2", "h3", "ul", "ol"]);
+
 /**
  * Plain document markup only. Every tag not on the list is removed (its text
  * kept); kept tags lose every attribute except a checked href on <a>, and
@@ -80,23 +98,49 @@ export function sanitize(html) {
   s = removeAll(s, /<\/?(script|style|iframe|object|embed|template|svg|math|noscript)\b[^>]*>/gi);
   s = removeAll(s, /<!--|--!?>/g);
   const linkOpen = [];
-  s = s.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g, (_m, slash, rawName, attrs) => {
+  // Kept tags still open, innermost last: a tag left open is closed where
+  // its parent ends (or at the end), so it can't style the rest of the page.
+  const open = [];
+  const closeDownTo = (index) => {
+    let out = "";
+    while (open.length > index) out += `</${open.pop()}>`;
+    return out;
+  };
+  // Attributes are matched quote-aware: a ">" inside a quoted value doesn't
+  // end the tag (it used to spill the rest of the tag onto the page).
+  s = s.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b((?:[^>"']|"[^"]*"|'[^']*')*)>/g, (_m, slash, rawName, attrs) => {
     const name = rawName.toLowerCase();
     if (!KEEP.has(name)) return "";
     if (name === "br") return slash ? "" : "<br />";
-    if (name === "a") {
-      if (slash) return linkOpen.pop() ? "</a>" : "";
-      const href = /\bhref\s*=\s*"([^"]*)"/i.exec(attrs)?.[1] ?? /\bhref\s*=\s*'([^']*)'/i.exec(attrs)?.[1];
-      const safe = href ? safeHref(href) : null;
-      linkOpen.push(Boolean(safe));
-      if (!safe) return "";
-      const external = /^https:/i.test(safe) ? ' rel="noopener noreferrer"' : "";
-      return `<a href="${escapeAttr(safe)}"${external}>`;
+    if (slash) {
+      if (name === "a" && !linkOpen.pop()) return ""; // its <a> was dropped
+      const at = open.lastIndexOf(name);
+      return at === -1 ? "" : closeDownTo(at); // a close with nothing open is dropped
     }
-    if (slash) return `</${name}>`;
-    if (name === "p" && /\bclass\s*=\s*"meta"/i.test(attrs)) return '<p class="meta">';
-    return `<${name}>`;
+    // Opening a block ends an open paragraph or heading; a new item ends the last.
+    let before = "";
+    if (BLOCKS.has(name)) {
+      const at = open.findLastIndex((tag) => PARAGRAPHS.has(tag));
+      if (at !== -1) before = closeDownTo(at);
+    }
+    if (name === "li") {
+      const at = open.lastIndexOf("li");
+      if (at !== -1 && !open.slice(at).some((tag) => tag === "ul" || tag === "ol")) before += closeDownTo(at);
+    }
+    if (name === "a") {
+      const raw = /\bhref\s*=\s*"([^"]*)"/i.exec(attrs)?.[1] ?? /\bhref\s*=\s*'([^']*)'/i.exec(attrs)?.[1];
+      const safe = raw ? safeHref(decodeEntities(raw)) : null;
+      linkOpen.push(Boolean(safe));
+      if (!safe) return before;
+      open.push("a");
+      const external = /^https:/i.test(safe) ? ' rel="noopener noreferrer"' : "";
+      return `${before}<a href="${escapeAttr(safe)}"${external}>`;
+    }
+    open.push(name);
+    if (name === "p" && /\bclass\s*=\s*"meta"/i.test(attrs)) return `${before}<p class="meta">`;
+    return `${before}<${name}>`;
   });
+  s += closeDownTo(0);
   // Everything above emits tags in exactly these forms. Any other "<" (an
   // unterminated tag at the end of the page, a stray attribute, anything
   // unexpected) is shown as text.
