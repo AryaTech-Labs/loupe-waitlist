@@ -39,3 +39,35 @@ describe("stamping a deploy's version", () => {
     expect(js).toContain('"./dial.js?v=x"');
   });
 });
+
+// LOU-102 4.9: every way a module can load another must carry the stamp, or a
+// browser could run one deploy's file beside another deploy's cached copy.
+describe("stampJs: every relative import form", () => {
+  test("side-effect imports, re-exports, dynamic imports and single quotes", () => {
+    const js = [
+      'import "./polyfill.js";',
+      "import { a } from './single.js';",
+      'export { b } from "./re-export.js";',
+      'const lazy = await import("./lazy.js");',
+      "const other = import('../other.js');",
+      'const text = "./not-an-import.js";',
+      'import { c } from "https://cdn.example/x.js";',
+    ].join("\n");
+    expect(stampJs(js, "v2")).toBe(
+      [
+        'import "./polyfill.js?v=v2";',
+        "import { a } from './single.js?v=v2';",
+        'export { b } from "./re-export.js?v=v2";',
+        'const lazy = await import("./lazy.js?v=v2");',
+        "const other = import('../other.js?v=v2');",
+        'const text = "./not-an-import.js";',
+        'import { c } from "https://cdn.example/x.js";',
+      ].join("\n"),
+    );
+  });
+
+  test("stamping twice doesn't stamp twice", () => {
+    const once = stampJs('import "./a.js";', "v3");
+    expect(stampJs(once, "v3")).toBe(once);
+  });
+});

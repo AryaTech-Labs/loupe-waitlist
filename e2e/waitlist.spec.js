@@ -806,3 +806,11 @@ test("the dial's time stamp changes per beat, not per frame", async ({ page }) =
   expect(writes).toBeLessThanOrEqual(2 * 8 + 2); // per beat
   expect(frames).toBeGreaterThan(writes * 2); // far fewer writes than frames
 });
+
+// LOU-102 4.10: the local server answers a malformed address and keeps going
+// (it used to crash mid-run). Local only: the live site is GitHub Pages.
+test("the test server survives a malformed address", async ({ request }) => {
+  test.skip(Boolean(process.env.SITE_URL), "local server only");
+  expect((await request.get("/%E0%A4%A")).status()).toBe(400);
+  expect((await request.get("./")).status()).toBe(200);
+});
