@@ -29,12 +29,30 @@ const SUBMIT_LABEL = submit.textContent;
 /** The address someone kept after we suggested another: Join then sends it as typed. */
 let keptAsTyped = null;
 
+/**
+ * Each field is described by what's showing for it, and nothing else: the
+ * error for the field it's about, the typo suggestion for the email. A hidden
+ * element named in aria-describedby is still read out (it used to say "Did you
+ * mean ?" on every focus), and a "What do you collect?" error was only ever
+ * attached to Email (LOU-102 4.12).
+ */
+function describeFields() {
+  for (const input of [email, collects]) {
+    const ids = [];
+    if (!error.hidden && input.getAttribute("aria-invalid") === "true") ids.push(error.id);
+    if (input === email && !suggestion.hidden) ids.push(suggestion.id);
+    if (ids.length) input.setAttribute("aria-describedby", ids.join(" "));
+    else input.removeAttribute("aria-describedby");
+  }
+}
+
 function showError(field, message) {
   hideSuggestion();
   error.textContent = message;
   error.hidden = false;
   const input = field === "collects" ? collects : email;
   input.setAttribute("aria-invalid", "true");
+  describeFields();
   input.focus();
 }
 
@@ -43,17 +61,20 @@ function clearError() {
   error.hidden = true;
   email.removeAttribute("aria-invalid");
   collects.removeAttribute("aria-invalid");
+  describeFields();
 }
 
 function showSuggestion(address) {
   suggestionFix.textContent = address;
   suggestionFix.setAttribute("aria-label", `Use ${address}`);
   suggestion.hidden = false;
+  describeFields();
 }
 
 function hideSuggestion() {
   suggestion.hidden = true;
   suggestionFix.textContent = "";
+  describeFields();
 }
 
 /** "Did you mean …@gmail.com?" for a likely typo in a valid-looking address. */
@@ -130,7 +151,12 @@ suggestionFix.addEventListener("click", () => {
   email.focus();
 });
 
-[email, collects].forEach((input) => input.addEventListener("input", () => input.removeAttribute("aria-invalid")));
+[email, collects].forEach((input) =>
+  input.addEventListener("input", () => {
+    input.removeAttribute("aria-invalid");
+    describeFields();
+  }),
+);
 
 // Clickjacking: GitHub Pages can't send frame-ancestors or X-Frame-Options, so
 // inside another site's frame the page hides its form and offers a link that
