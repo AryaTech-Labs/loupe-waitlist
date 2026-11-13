@@ -79,3 +79,33 @@ describe("the legal import keeps plain document markup only", () => {
     expect(html).toContain('<link rel="canonical" href="https://loupeweb.com/privacy/" />');
   });
 });
+
+// LOU-102 4.8: robustness of the sanitiser (none of these could run script;
+// the final canonical-form pass already guarantees that).
+describe("sanitize: robustness", () => {
+  it("an escaped & in a link survives as one & (query links keep working)", () => {
+    const out = sanitize('<p><a href="https://example.com/?a=1&amp;b=2">x</a></p>');
+    expect(out).toBe('<p><a href="https://example.com/?a=1&amp;b=2" rel="noopener noreferrer">x</a></p>');
+    // …and the browser reads it back as a=1&b=2, not a=1&amp;b=2.
+    expect(out).not.toContain("&amp;amp;");
+  });
+
+  it("a > inside a quoted attribute doesn't spill the rest of the tag onto the page", () => {
+    expect(sanitize('<p title="a>b" onclick="x()">Hello</p>')).toBe("<p>Hello</p>");
+    expect(sanitize("<p data-x='1>2'>Hi</p>")).toBe("<p>Hi</p>");
+  });
+
+  it("a kept tag left open is closed where its parent ends, so it can't style the rest of the page", () => {
+    expect(sanitize("<p><strong>Important</p><p>Normal</p>")).toBe("<p><strong>Important</strong></p><p>Normal</p>");
+    expect(sanitize("<h2>Title<p>Body</p>")).toBe("<h2>Title</h2><p>Body</p>");
+  });
+
+  it("a closing tag with nothing open is dropped", () => {
+    expect(sanitize("<p>Text</em></p>")).toBe("<p>Text</p>");
+  });
+
+  it("well-formed markup is unchanged", () => {
+    const html = "<h2>1. Data</h2><p>We keep <strong>email</strong> and <em>nothing else</em>.</p><ul><li>One</li><li>Two</li></ul>";
+    expect(sanitize(html)).toBe(html);
+  });
+});

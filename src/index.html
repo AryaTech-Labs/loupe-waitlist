@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src https://dxrmrfaptbhzyegbbmnz.supabase.co https://app.loops.so; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src https://dxrmrfaptbhzyegbbmnz.supabase.co https://app.loops.so; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'"
     />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <title>Loupe — Join the beta</title>
@@ -72,7 +72,6 @@
               maxlength="254"
               required
               placeholder="you@example.com"
-              aria-describedby="waitlist-error waitlist-suggestion"
             />
           </div>
           <div class="field">
@@ -89,8 +88,8 @@
           </div>
           <!-- A trap for bots: hidden from people and from assistive tech. -->
           <div class="trap" aria-hidden="true">
-            <label for="website">Website</label>
-            <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+            <label for="loupe-trap">Leave this empty</label>
+            <input id="loupe-trap" name="loupe-trap" type="text" tabindex="-1" autocomplete="off" data-testid="waitlist.trap" />
           </div>
           <p id="waitlist-error" class="error" data-testid="waitlist.error" role="alert" hidden></p>
           <button type="submit" class="primary" data-testid="waitlist.submit">Join the waitlist</button>

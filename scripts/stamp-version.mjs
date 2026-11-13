@@ -18,9 +18,17 @@ export function stampHtml(html, version) {
   );
 }
 
-/** Relative static imports: `from "./x.js"`, `from "../y.js"`. */
+/**
+ * Every relative module load, in either quote: `from "./x.js"` (imports and
+ * re-exports), `import "./x.js"` (side-effect) and `import("./x.js")`
+ * (dynamic). An unstamped one would load the cached copy from an older
+ * deploy beside this deploy's files (LOU-102 4.9).
+ */
 export function stampJs(js, version) {
-  return js.replace(/(\bfrom\s+")(\.{1,2}\/[^"?#]+\.js)(")/g, `$1$2?v=${version}$3`);
+  return js.replace(
+    /(\bfrom\s+|\bimport\s*\(\s*|\bimport\s+)(["'])(\.{1,2}\/[^"'?#\s]+\.js)\2/g,
+    (_m, lead, quote, path) => `${lead}${quote}${path}?v=${version}${quote}`,
+  );
 }
 
 async function* files(dir) {

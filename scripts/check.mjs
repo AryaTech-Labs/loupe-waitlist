@@ -4,6 +4,7 @@
 //  - the page's CSP doesn't allow the Supabase origin config.js talks to;
 //  - a beta date slips into the copy (LOU-80: no date shown anywhere).
 import { readFile } from "node:fs/promises";
+import { policyProblems } from "./csp-rules.mjs";
 
 const root = new URL("../src/", import.meta.url);
 const read = (name) => readFile(new URL(name, root), "utf8");
@@ -27,10 +28,10 @@ const html = await read("index.html");
 const csp = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1] ?? "";
 if (url && !csp.includes(`connect-src ${url}`)) failures.push(`index.html: CSP connect-src doesn't allow ${url}`);
 
-// Every page keeps a strict CSP: nothing allowed by default, no inline or
-// eval'd script, no plugins, no <base> rewrites, Trusted Types enforced; and
-// the connections the page makes are exactly Supabase and Loops.
-const CONNECT_ALLOWED = new Set([url, "https://app.loops.so"]);
+// Every page carries exactly its pinned CSP (scripts/csp-rules.mjs): nothing
+// allowed by default, script only from the site and only on the index page,
+// connections exactly Supabase and Loops, Trusted Types enforced. Any source
+// or directive added, dropped or loosened fails (LOU-102 4.4).
 const pages = ["index.html", "privacy/index.html", "terms/index.html", "community-guidelines/index.html"];
 for (const page of pages) {
   const source = await read(page).catch(() => null);
@@ -39,13 +40,8 @@ for (const page of pages) {
     continue;
   }
   const policy = source.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1] ?? "";
-  const directive = (name) => policy.split(";").map((d) => d.trim()).find((d) => d === name || d.startsWith(`${name} `));
-  if (directive("default-src") !== "default-src 'none'") failures.push(`${page}: CSP must start from default-src 'none'`);
-  if (/'unsafe-inline'|'unsafe-eval'|'unsafe-hashes'|\bdata:\s*(?!;)[^;]*script|\*/.test(policy)) failures.push(`${page}: CSP allows unsafe sources`);
-  if (!directive("base-uri") || !directive("form-action")) failures.push(`${page}: CSP needs base-uri and form-action`);
-  if (!policy.includes("require-trusted-types-for 'script'")) failures.push(`${page}: CSP doesn't enforce Trusted Types`);
-  const connect = directive("connect-src")?.split(/\s+/).slice(1) ?? [];
-  for (const origin of connect) if (!CONNECT_ALLOWED.has(origin)) failures.push(`${page}: CSP connect-src allows ${origin}`);
+  if (!policy) failures.push(`${page}: no Content-Security-Policy`);
+  else failures.push(...policyProblems(page, policy, url));
   if (/<script(?![^>]*\bsrc=)[^>]*>/i.test(source)) failures.push(`${page}: inline <script>`);
   if (/\son[a-z]+\s*=/i.test(source)) failures.push(`${page}: inline event handler`);
   if (page !== "index.html" && /<script/i.test(source)) failures.push(`${page}: legal pages carry no script`);

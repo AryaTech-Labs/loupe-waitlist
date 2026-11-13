@@ -36,6 +36,13 @@ jobs:
         run: npx playwright install --with-deps webkit chromium
       - name: Browser tests (iPhone + Android)
         run: npm run test:e2e
+      # What ships is the version-stamped copy (deploy job): test that too,
+      # before it's published rather than only by the Live check after.
+      - name: Browser tests on the version-stamped copy
+        run: |
+          cp -r src "$RUNNER_TEMP/stamped"
+          node scripts/stamp-version.mjs "$RUNNER_TEMP/stamped" "${GITHUB_SHA::12}"
+          SITE_ROOT="$RUNNER_TEMP/stamped" npm run test:e2e
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

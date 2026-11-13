@@ -69,7 +69,7 @@ test("the phone layout: dial, wordmark, form, nothing wider than the screen", as
   // Someone arriving from an ad can join without scrolling.
   await expect(byTestId(page, "waitlist.submit")).toBeInViewport({ ratio: 1 });
   // The bot trap is never something a person can reach.
-  await expect(page.locator("#website")).not.toBeInViewport();
+  await expect(page.locator('[data-testid="waitlist.trap"]')).not.toBeInViewport();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
@@ -141,11 +141,31 @@ test("a bot that fills the hidden field sees success and sends nothing", async (
   const loops = await answerLoops(page);
   await page.goto("./");
   await page.getByLabel("Email").fill("bot@example.com");
-  await page.locator("#website").fill("https://spam.example", { force: true });
+  await page.locator('[data-testid="waitlist.trap"]').fill("https://spam.example", { force: true });
   await byTestId(page, "waitlist.submit").click();
   await expect(byTestId(page, "waitlist.joined")).toBeVisible();
   expect(requests).toHaveLength(0);
   expect(loops).toHaveLength(0);
+});
+
+// LOU-102 4.6: password managers and form-fill profiles fill fields by
+// name and label (a "Website" field gets an identity's URL). A person whose
+// manager filled the trap would get a fake success and never join. The trap
+// carries nothing autofill recognises; bots still fill every field.
+test("the bot trap has nothing a password manager would fill", async ({ page }) => {
+  await page.goto("./");
+  const trap = page.locator('[data-testid="waitlist.trap"]');
+  const attrs = await trap.evaluate((el) => ({
+    name: el.getAttribute("name"),
+    id: el.id,
+    label: el.labels?.[0]?.textContent ?? "",
+    autocomplete: el.getAttribute("autocomplete"),
+    tabindex: el.getAttribute("tabindex"),
+  }));
+  const autofillWords = /url|web|site|name|mail|company|org|address|phone|tel|city|zip|post|user|login/i;
+  for (const value of [attrs.name, attrs.id, attrs.label]) expect(value).not.toMatch(autofillWords);
+  expect(attrs.autocomplete).toBe("off");
+  expect(attrs.tabindex).toBe("-1");
 });
 
 test("a likely typo gets a 'Did you mean' on the first Join, sends nothing, and moves nothing", async ({ page }) => {
@@ -237,6 +257,19 @@ test("after joining, the person goes to the Loops list and the card names the we
   });
 });
 
+// LOU-102 4.2: Loops sends the welcome when someone is added to the list —
+// once. Someone already on it gets no new email, whatever Loops answers, so
+// the card mustn't promise one.
+test("someone already on the list isn't promised a welcome email", async ({ page }) => {
+  await answerInsert(page, 409);
+  await answerLoops(page, 200, { success: true });
+  await page.goto("./");
+  await page.getByLabel("Email").fill("again@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toContainText("You'd already joined. We'll email you when your invite is ready.");
+  await expect(byTestId(page, "waitlist.joined")).not.toContainText("welcome email");
+});
+
 test("someone already on the list is still sent to Loops (it ignores repeats)", async ({ page }) => {
   await answerInsert(page, 409);
   const loops = await answerLoops(page);
@@ -263,6 +296,75 @@ for (const [name, status, body] of [
     await expect(byTestId(page, "waitlist.error")).toBeHidden();
   });
 }
+
+// LOU-102 4.5: a keyboard user can always see which field has focus —
+// including in forced-colors mode (Windows High Contrast), which replaces
+// author colours: there the old cue (a 1px border colour change) became
+// black → very dark navy, practically invisible. A real ring (an outline
+// of 2px or more, which forced colours keep in a system colour) is required.
+for (const forcedColors of ["none", "active"]) {
+  test(`the focused field gets a visible ring (forced colors: ${forcedColors})`, async ({ page, browserName }) => {
+    test.skip(forcedColors === "active" && browserName !== "chromium", "forced-colors emulation is Chromium-only");
+    await page.emulateMedia({ forcedColors, reducedMotion: "reduce" });
+    await page.goto("./");
+    for (const label of ["Email", /What do you collect\?/]) {
+      const field = page.getByLabel(label);
+      await field.focus();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Tab"); // keyboard focus, so :focus-visible applies
+      await expect(field).toBeFocused();
+      const ring = await field.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { style: s.outlineStyle, width: parseFloat(s.outlineWidth) };
+      });
+      expect(ring.style).not.toBe("none");
+      expect(ring.width).toBeGreaterThanOrEqual(2);
+    }
+  });
+}
+
+// LOU-102 4.3: a refusal says what the person can do, not "try again".
+for (const [status, message] of [
+  [400, "We couldn't add that address. Check it and try again."],
+  [403, "Sign-ups are paused for a moment. Please try again later."],
+  [429, "Too many tries. Please wait a minute and try again."],
+]) {
+  test(`a ${status} from the server says what to do`, async ({ page }) => {
+    await answerInsert(page, status);
+    await page.goto("./");
+    await page.getByLabel("Email").fill("someone@example.com");
+    await byTestId(page, "waitlist.submit").click();
+    await expect(byTestId(page, "waitlist.error")).toHaveText(message);
+    await expect(byTestId(page, "waitlist.submit")).toBeEnabled();
+  });
+}
+
+// LOU-102 4.1: a request that never answers (captive portal, dropped link)
+// gives the form back with a message, instead of "Joining…" for a minute+.
+test("a stalled sign-up gives the form back after 10 seconds", async ({ page }) => {
+  await page.clock.install();
+  await page.route(`${SUPABASE}/**`, () => {}); // never answers
+  await page.goto("./");
+  await page.getByLabel("Email").fill("someone@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.submit")).toBeDisabled();
+  await page.clock.fastForward(10_500);
+  await expect(byTestId(page, "waitlist.error")).toHaveText("This is taking too long. Check your connection and try again.");
+  await expect(byTestId(page, "waitlist.submit")).toBeEnabled();
+  await expect(byTestId(page, "waitlist.joined")).toBeHidden();
+});
+
+test("offline: says so, sends nothing, keeps the form", async ({ page, context }) => {
+  const inserts = await answerInsert(page, 201);
+  await page.goto("./");
+  await page.getByLabel("Email").fill("someone@example.com");
+  await context.setOffline(true);
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.error")).toHaveText("You're offline. Check your connection and try again.");
+  await expect(byTestId(page, "waitlist.submit")).toBeEnabled();
+  expect(inserts).toHaveLength(0);
+  await context.setOffline(false);
+});
 
 test("a Supabase failure never reaches Loops", async ({ page }) => {
   await answerInsert(page, 500);
@@ -678,4 +780,227 @@ test("not framed, the open-Loupe link never shows", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator('[data-testid="waitlist.framed"]')).toHaveCount(0);
   await expect(byTestId(page, "waitlist.form")).toBeVisible();
+});
+
+// LOU-102 4.7 (audit claim checked): the dial writes its data-time stamp once
+// per beat (8 a second), not once per frame — the write is guarded.
+test("the dial's time stamp changes per beat, not per frame", async ({ page }) => {
+  await page.goto("./");
+  await expect(byTestId(page, "waitlist.dial")).toBeVisible();
+  const { writes, frames } = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const canvas = document.querySelector('[data-testid="waitlist.dial"]');
+        let writes = 0;
+        let frames = 0;
+        new MutationObserver((list) => (writes += list.length)).observe(canvas, { attributeFilter: ["data-time"] });
+        const tick = () => {
+          frames += 1;
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        setTimeout(() => resolve({ writes, frames }), 2000);
+      }),
+  );
+  expect(writes).toBeGreaterThan(0); // the dial is running
+  expect(writes).toBeLessThanOrEqual(2 * 8 + 2); // per beat
+  expect(frames).toBeGreaterThan(writes * 2); // far fewer writes than frames
+});
+
+// LOU-102 4.10: the local server answers a malformed address and keeps going
+// (it used to crash mid-run). Local only: the live site is GitHub Pages.
+test("the test server survives a malformed address", async ({ request }) => {
+  test.skip(Boolean(process.env.SITE_URL), "local server only");
+  expect((await request.get("/%E0%A4%A")).status()).toBe(400);
+  expect((await request.get("./")).status()).toBe(200);
+});
+
+// LOU-102 4.12: the gaps the audit found in this suite.
+
+// A second Join while the first is still out (a double tap, Enter after a
+// tap, a script calling requestSubmit) must not send a second insert or a
+// second Loops post. requestSubmit() ignores a disabled button, so only the
+// handler's own guard stops it.
+test("a second Join while the first is still out sends nothing more", async ({ page }) => {
+  const inserts = [];
+  let release;
+  const held = new Promise((resolve) => (release = resolve));
+  await page.route(`${SUPABASE}/**`, async (route) => {
+    inserts.push(route.request().postData());
+    await held;
+    await route.fulfill({ status: 201, body: "" });
+  });
+  const loops = await answerLoops(page);
+  await page.goto("./");
+  await page.getByLabel("Email").fill("collector@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.submit")).toBeDisabled();
+  await page.getByLabel("Email").press("Enter");
+  await byTestId(page, "waitlist.form").evaluate((form) => {
+    form.requestSubmit();
+    form.requestSubmit();
+  });
+  release();
+  await expect(byTestId(page, "waitlist.joined")).toBeVisible();
+  expect(inserts).toHaveLength(1);
+  expect(loops).toHaveLength(1);
+});
+
+/**
+ * WCAG 2.1 AA, as axe-core checks it, once the page has settled: mid-way
+ * through the entrance rise or the joined card's fade, text is still partly
+ * transparent and axe measures that, not the colours people read.
+ */
+async function accessibilityProblems(page) {
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  const { violations } = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  return violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
+}
+
+for (const scheme of ["light", "dark"]) {
+  test(`no WCAG 2.1 AA problems in any state (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await answerInsert(page, 201);
+    await page.goto("./");
+    expect(await accessibilityProblems(page), "the form").toEqual([]);
+    await byTestId(page, "waitlist.submit").click();
+    await expect(byTestId(page, "waitlist.error")).toBeVisible();
+    expect(await accessibilityProblems(page), "an error").toEqual([]);
+    await page.getByLabel("Email").fill("someone@gmial.com");
+    await byTestId(page, "waitlist.submit").click();
+    await expect(byTestId(page, "waitlist.suggestion")).toBeVisible();
+    expect(await accessibilityProblems(page), "a suggestion").toEqual([]);
+    await page.getByLabel("Email").fill("someone@example.com");
+    await byTestId(page, "waitlist.submit").click();
+    await expect(byTestId(page, "waitlist.joined")).toBeVisible();
+    expect(await accessibilityProblems(page), "joined").toEqual([]);
+    for (const slug of ["privacy", "terms", "community-guidelines"]) {
+      await page.goto(`./${slug}/`);
+      expect(await accessibilityProblems(page), slug).toEqual([]);
+    }
+  });
+}
+
+test("focus goes where the person needs to be next", async ({ page }) => {
+  await answerInsert(page, 201);
+  await page.goto("./");
+  const emailField = page.getByLabel("Email");
+  const collectsField = page.getByLabel(/What do you collect\?/);
+  // Nothing showing: nothing read out after the label. (A hidden element named
+  // in aria-describedby is still read: it used to say "Did you mean ?".)
+  await expect(emailField).toHaveAccessibleDescription("");
+  // A bad email: focus on the field, which names the error.
+  await byTestId(page, "waitlist.submit").click();
+  await expect(emailField).toBeFocused();
+  await expect(emailField).toHaveAccessibleDescription("Enter a valid email address.");
+  // Too much in "What do you collect?" (maxlength is only a hint): focus
+  // there, and that field (not Email) names the error.
+  await emailField.fill("someone@example.com");
+  await collectsField.evaluate((input) => {
+    input.removeAttribute("maxlength");
+    input.value = "x".repeat(281);
+  });
+  await byTestId(page, "waitlist.submit").click();
+  await expect(collectsField).toBeFocused();
+  await expect(collectsField).toHaveAttribute("aria-invalid", "true");
+  await expect(collectsField).toHaveAccessibleDescription("Keep it under 280 characters.");
+  await expect(emailField).toHaveAccessibleDescription("");
+  await collectsField.fill("");
+  // A suggestion describes the email field while it shows; tapping it puts it
+  // in the field and focus back on the field.
+  await emailField.fill("someone@gmial.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(emailField).toHaveAccessibleDescription(/Did you mean .*someone@gmail\.com/);
+  await byTestId(page, "waitlist.suggestion.fix").click();
+  await expect(emailField).toBeFocused();
+  await expect(emailField).toHaveValue("someone@gmail.com");
+  await expect(emailField).toHaveAccessibleDescription("");
+  // Joined: focus moves to the card (the form it was in is gone).
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toBeFocused();
+});
+
+test("Tab goes email, collects, Join, and never into the bot trap", async ({ page }) => {
+  await page.goto("./");
+  await page.getByLabel("Email").focus();
+  const order = [];
+  for (let i = 0; i < 2; i++) {
+    await page.keyboard.press("Tab");
+    order.push(await page.evaluate(() => document.activeElement?.id || document.activeElement?.dataset.testid || ""));
+  }
+  expect(order[0]).toBe("collects");
+  expect(order).not.toContain("loupe-trap");
+  // WebKit only tabs to text fields unless the person turns on full keyboard access.
+  if (order[1] !== "") expect(order[1]).toBe("waitlist.submit");
+});
+
+/** Counts writes of the dial's time stamp (one per beat while it's drawing). */
+async function watchDial(page) {
+  await page.evaluate(() => {
+    window.__dialWrites = 0;
+    new MutationObserver((list) => (window.__dialWrites += list.length)).observe(
+      document.querySelector('[data-testid="waitlist.dial"]'),
+      { attributeFilter: ["data-time"] },
+    );
+  });
+  return async (ms) => {
+    const before = await page.evaluate(() => window.__dialWrites);
+    await page.waitForTimeout(ms);
+    return (await page.evaluate(() => window.__dialWrites)) - before;
+  };
+}
+
+test("the dial stops drawing while the tab is hidden and starts again when it's back", async ({ page }) => {
+  await page.goto("./");
+  await expect(byTestId(page, "waitlist.dial")).toHaveAttribute("data-time", /\d+/);
+  const writesIn = await watchDial(page);
+  expect(await writesIn(600)).toBeGreaterThan(0);
+  const setHidden = (hidden) =>
+    page.evaluate((hidden) => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (hidden ? "hidden" : "visible") });
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, hidden);
+  await setHidden(true);
+  expect(await writesIn(600)).toBe(0);
+  await setHidden(false);
+  expect(await writesIn(600)).toBeGreaterThan(0);
+});
+
+test("the dial stops drawing while it's off screen", async ({ page }) => {
+  await page.goto("./");
+  await expect(byTestId(page, "waitlist.dial")).toHaveAttribute("data-time", /\d+/);
+  const writesIn = await watchDial(page);
+  // Moved, not resized: `translate` changes where it is, not its layout size.
+  // (Not `transform`: the entrance animation's fill holds that at none.)
+  await byTestId(page, "waitlist.dial").evaluate((c) => (c.style.translate = "0 -10000px"));
+  await page.waitForTimeout(200); // the observer reports on the next frame
+  expect(await writesIn(600)).toBe(0);
+  await byTestId(page, "waitlist.dial").evaluate((c) => (c.style.translate = ""));
+  await page.waitForTimeout(200);
+  expect(await writesIn(600)).toBeGreaterThan(0);
+});
+
+// Nothing the page does trips its own CSP: a blocked request or script fails
+// quietly in a browser, so the suite listens for the violation events.
+test("joining trips nothing in the page's CSP (and the listener does catch one)", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__violations = [];
+    document.addEventListener("securitypolicyviolation", (e) =>
+      window.__violations.push(`${e.effectiveDirective} ${e.blockedURI}`),
+    );
+  });
+  await answerInsert(page, 201);
+  const loops = await answerLoops(page);
+  await page.goto("./");
+  await page.getByLabel("Email").fill("collector@example.com");
+  await page.getByLabel(/What do you collect\?/).fill("Vintage divers");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toBeVisible();
+  expect(loops).toHaveLength(1);
+  expect(await page.evaluate(() => window.__violations)).toEqual([]);
+  // The listener works: a request the CSP doesn't allow is reported.
+  await page.evaluate(() => fetch("https://blocked.example/").catch(() => {}));
+  await expect.poll(() => page.evaluate(() => window.__violations.length)).toBeGreaterThan(0);
 });
