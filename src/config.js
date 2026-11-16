@@ -10,6 +10,10 @@ export const SUPABASE_URL = "https://dxrmrfaptbhzyegbbmnz.supabase.co";
 // WELCOME_EMAIL_LIVE is the off switch: false skips Loops. The card's line is
 // the same either way.
 export const WELCOME_EMAIL_LIVE = true;
+// LOU-103: the sign-up's ?ref= tag goes into `waitlist.ref`. Off until Hoover
+// adds that column: PostgREST refuses an unknown column with 400, which would
+// break every sign-up. The tag is still read and kept for the session.
+export const REF_COLUMN_LIVE = false;
 export const LOOPS_FORM_URL = "https://app.loops.so/api/newsletter-form/cmwb6vqci006n0j0d9fl670vn";
 export const LOOPS_LIST_ID = "cmwb7tp127bfc0jzggi1gb7kp";
 export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4cm1yZmFwdGJoenllZ2JibW56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMTI5ODgsImV4cCI6MjA4ODY4ODk4OH0.AuNqCZjKOZolwlokdJn9D5O-9HhJa6xYtyahBdMjk9I";

@@ -43,9 +43,53 @@ export function isValidEmail(email) {
 }
 
 /** The row as sent. An empty "What do you collect?" is null, not "". */
-export function buildRow({ email, collects }) {
+/**
+ * The row to insert. `ref` (LOU-103) is added only once the `waitlist.ref`
+ * column is live (REF_COLUMN_LIVE): PostgREST refuses an unknown column with
+ * 400, which would break every sign-up.
+ */
+export function buildRow({ email, collects, ref = null }, { refLive = false } = {}) {
   const text = String(collects ?? "").trim().replace(/\s+/g, " ");
-  return { email: normalizeEmail(email), collects: text.length > 0 ? text : null };
+  const row = { email: normalizeEmail(email), collects: text.length > 0 ? text : null };
+  if (refLive && ref) row.ref = ref;
+  return row;
+}
+
+// Where a sign-up came from (LOU-103): `loupeweb.com/?ref=meta-teaser-nov`.
+// Tags are meta-<ad>, ig-<post>, creator-<handle>, email-<send>: lowercase,
+// a–z 0–9 and hyphens. Anything else is NULL, never an error.
+
+export const REF_MAX = 64;
+export const REF_STORAGE_KEY = "loupe.waitlist.ref";
+
+/** A ref tag as stored: trimmed, lowercased, at most REF_MAX; null if malformed. */
+export function normalizeRef(raw) {
+  if (typeof raw !== "string") return null;
+  const tag = raw.trim().toLowerCase();
+  if (!/^[a-z0-9-]+$/.test(tag)) return null;
+  return tag.slice(0, REF_MAX);
+}
+
+/**
+ * The ref for this visit: the URL's `?ref=` when valid (kept for the session,
+ * so a visitor who browses first still carries it), else the one kept earlier.
+ * Storage can be missing or throw (private mode); then only the URL counts.
+ */
+export function currentRef(search, storage) {
+  const fromUrl = normalizeRef(new URLSearchParams(search).get("ref"));
+  if (fromUrl) {
+    try {
+      storage?.setItem(REF_STORAGE_KEY, fromUrl);
+    } catch {
+      // Not kept: this page still sends it.
+    }
+    return fromUrl;
+  }
+  try {
+    return normalizeRef(storage?.getItem(REF_STORAGE_KEY) ?? null);
+  } catch {
+    return null;
+  }
 }
 
 // Typo suggestions for the big mail providers ("Did you mean name@gmail.com?").

@@ -1017,3 +1017,59 @@ test("joining trips nothing in the page's CSP (and the listener does catch one)"
   await page.evaluate(() => fetch("https://blocked.example/").catch(() => {}));
   await expect.poll(() => page.evaluate(() => window.__violations.length)).toBeGreaterThan(0);
 });
+
+// LOU-103: ?ref= is read and kept for the session, and goes into the insert
+// only once REF_COLUMN_LIVE is on (until the column exists, sending it would
+// make every sign-up a 400).
+async function refColumnLive(page) {
+  await page.route("**/config.js*", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace("REF_COLUMN_LIVE = false", "REF_COLUMN_LIVE = true");
+    await route.fulfill({ response, body });
+  });
+}
+
+async function join(page, address) {
+  await page.getByLabel("Email").fill(address);
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toBeVisible();
+}
+
+test("ref tag: not sent while the column isn't live", async ({ page }) => {
+  const inserts = await answerInsert(page, 201);
+  await answerLoops(page);
+  await page.goto("./?ref=meta-teaser-nov");
+  await join(page, "collector@example.com");
+  expect(JSON.parse(inserts[0].body)).toEqual({ email: "collector@example.com", collects: null });
+});
+
+test("ref tag: once live, ?ref=test-abc lands as ref = test-abc, and Loops doesn't get it", async ({ page }) => {
+  await refColumnLive(page);
+  const inserts = await answerInsert(page, 201);
+  const loops = await answerLoops(page);
+  await page.goto("./?ref=Test-ABC");
+  await join(page, "collector@example.com");
+  expect(JSON.parse(inserts[0].body)).toEqual({ email: "collector@example.com", collects: null, ref: "test-abc" });
+  expect(new URLSearchParams(loops[0].body).has("ref")).toBe(false);
+});
+
+test("ref tag: a plain visit sends no ref, a malformed one is dropped", async ({ page }) => {
+  await refColumnLive(page);
+  const inserts = await answerInsert(page, 201);
+  await answerLoops(page);
+  await page.goto("./?ref=%3Cscript%3E");
+  await join(page, "collector@example.com");
+  expect(JSON.parse(inserts[0].body)).not.toHaveProperty("ref");
+});
+
+test("ref tag: kept for the session while the visitor browses", async ({ page }) => {
+  await refColumnLive(page);
+  const inserts = await answerInsert(page, 201);
+  await answerLoops(page);
+  await page.goto("./?ref=ig-launch");
+  await page.getByRole("link", { name: "Privacy" }).click();
+  await expect(page).toHaveURL(/privacy\/$/);
+  await page.goto("./");
+  await join(page, "collector@example.com");
+  expect(JSON.parse(inserts[0].body)).toHaveProperty("ref", "ig-launch");
+});
