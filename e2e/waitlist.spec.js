@@ -235,14 +235,14 @@ test("the fine print says what we'll send, and Privacy is loupeweb.com's own pag
   expect(await page.locator(".fineprint").evaluate((p) => p.getBoundingClientRect().height)).toBeLessThanOrEqual(20);
 });
 
-test("after joining, the person goes to the Loops list and the card names the welcome email", async ({ page }) => {
+test("after joining, the person goes to the Loops list and the card names their address", async ({ page }) => {
   const inserts = await answerInsert(page, 201);
   const loops = await answerLoops(page);
   await page.goto("./");
   await page.getByLabel("Email").fill("  Collector@Example.com ");
   await page.getByLabel(/What do you collect\?/).fill("Vintage divers");
   await byTestId(page, "waitlist.submit").click();
-  await expect(byTestId(page, "waitlist.joined")).toContainText("We've sent a welcome email to collector@example.com.");
+  await expect(byTestId(page, "waitlist.joined")).toContainText("We'll email collector@example.com when your invite is ready.");
   expect(inserts).toHaveLength(1);
   expect(loops).toHaveLength(1);
   expect(loops[0].method).toBe("POST");
@@ -260,13 +260,26 @@ test("after joining, the person goes to the Loops list and the card names the we
 // LOU-102 4.2: Loops sends the welcome when someone is added to the list —
 // once. Someone already on it gets no new email, whatever Loops answers, so
 // the card mustn't promise one.
+// LOU-99: after the waitlist migration a repeat sign-up gets 201 and no row,
+// exactly like a first one, and Loops answers success to both. The card can't
+// tell them apart, so it never says an email was sent.
+test("a repeat sign-up answered 201 (after the LOU-99 migration) isn't told an email was sent", async ({ page }) => {
+  await answerInsert(page, 201);
+  await answerLoops(page, 200, { success: true });
+  await page.goto("./");
+  await page.getByLabel("Email").fill("again@example.com");
+  await byTestId(page, "waitlist.submit").click();
+  await expect(byTestId(page, "waitlist.joined")).toContainText("We'll email again@example.com when your invite is ready.");
+  await expect(byTestId(page, "waitlist.joined")).not.toContainText(/sent|welcome email/i);
+});
+
 test("someone already on the list isn't promised a welcome email", async ({ page }) => {
   await answerInsert(page, 409);
   await answerLoops(page, 200, { success: true });
   await page.goto("./");
   await page.getByLabel("Email").fill("again@example.com");
   await byTestId(page, "waitlist.submit").click();
-  await expect(byTestId(page, "waitlist.joined")).toContainText("You'd already joined. We'll email you when your invite is ready.");
+  await expect(byTestId(page, "waitlist.joined")).toContainText("You'd already joined. We'll email again@example.com when your invite is ready.");
   await expect(byTestId(page, "waitlist.joined")).not.toContainText("welcome email");
 });
 
@@ -292,7 +305,7 @@ for (const [name, status, body] of [
     await page.getByLabel("Email").fill("collector@example.com");
     await byTestId(page, "waitlist.submit").click();
     await expect(byTestId(page, "waitlist.joined")).toContainText("You're on the list.");
-    await expect(byTestId(page, "waitlist.joined")).toContainText("We'll email you when your invite is ready.");
+    await expect(byTestId(page, "waitlist.joined")).toContainText("We'll email collector@example.com when your invite is ready.");
     await expect(byTestId(page, "waitlist.error")).toBeHidden();
   });
 }
@@ -387,7 +400,7 @@ test("with the welcome email switched off: no Loops call, the invite line", asyn
   await page.goto("./");
   await page.getByLabel("Email").fill("collector@example.com");
   await byTestId(page, "waitlist.submit").click();
-  await expect(byTestId(page, "waitlist.joined")).toContainText("We'll email you when your invite is ready.");
+  await expect(byTestId(page, "waitlist.joined")).toContainText("We'll email collector@example.com when your invite is ready.");
   expect(loops).toHaveLength(0);
 });
 

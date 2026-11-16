@@ -141,12 +141,15 @@ export function suggestEmail(raw) {
   return best && !tied ? `${local}@${best}` : null;
 }
 
-/** What the card says once someone's on the list: the welcome email is named only once Loops took them. */
-export function joinedBody(email, welcomeSent, alreadyJoined = false) {
-  // Loops sends the welcome once, when someone is added to the list: someone
-  // already on it gets no new email, whatever the form post answers (LOU-102 4.2).
-  if (alreadyJoined) return "You'd already joined. We'll email you when your invite is ready.";
-  return welcomeSent ? `We've sent a welcome email to ${email}.` : "We'll email you when your invite is ready.";
+/** What the card says once someone's on the list. It never says an email was
+ * sent: Loops welcomes someone only the first time they're added, and after
+ * the LOU-99 waitlist migration a repeat sign-up is answered 201 like a first
+ * one, so the page can't tell them apart (Hoover's ruling: neutral wording).
+ * The address is named so a typo shows. A 409 (before that migration) still
+ * says they'd already joined. */
+export function joinedBody(email, alreadyJoined = false) {
+  const line = `We'll email ${email} when your invite is ready.`;
+  return alreadyJoined ? `You'd already joined. ${line}` : line;
 }
 
 /** The Loops form post: the list, where they came from, and what they collect. */

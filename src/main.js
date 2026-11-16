@@ -85,11 +85,11 @@ function offerSuggestion() {
   else hideSuggestion();
 }
 
-function showJoined(address, welcomeSent = false, alreadyJoined = false) {
+function showJoined(address, alreadyJoined = false) {
   // The card keeps the form's height, so the dial above it doesn't jump.
   const card = form.closest(".card");
   card.style.minHeight = `${card.getBoundingClientRect().height}px`;
-  joinedBodyText.textContent = joinedBody(address, welcomeSent, alreadyJoined);
+  joinedBodyText.textContent = joinedBody(address, alreadyJoined);
   form.hidden = true;
   joined.hidden = false;
   joined.focus();
@@ -125,12 +125,11 @@ form.addEventListener("submit", async (event) => {
     setBusy(false);
     return showError("email", failureMessage(result, { online: navigator.onLine !== false }));
   }
-  // On the list. Now the mailing list, which sends the welcome email; the card
-  // only promises that email when Loops took them.
-  const welcomeSent =
-    WELCOME_EMAIL_LIVE && (await addToMailingList(row, { formUrl: LOOPS_FORM_URL, listId: LOOPS_LIST_ID }));
+  // On the list. Now the mailing list, which sends the welcome email to a
+  // first sign-up. Its answer doesn't change the card (see joinedBody).
+  if (WELCOME_EMAIL_LIVE) await addToMailingList(row, { formUrl: LOOPS_FORM_URL, listId: LOOPS_LIST_ID });
   setBusy(false);
-  showJoined(row.email, welcomeSent, result.alreadyJoined === true);
+  showJoined(row.email, result.alreadyJoined === true);
 });
 
 email.addEventListener("blur", (event) => {
