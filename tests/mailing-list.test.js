@@ -57,16 +57,18 @@ describe("addToMailingList", () => {
   });
 });
 
+// LOU-99: after the waitlist migration a repeat sign-up is answered 201, the
+// same as a first one, and Loops says success to both but only welcomes the
+// first. So the card never claims an email was sent (Hoover's ruling).
 describe("joinedBody", () => {
-  it("names the welcome email only once Loops took them", () => {
-    expect(joinedBody("a@b.co", true)).toBe("We've sent a welcome email to a@b.co.");
-    expect(joinedBody("a@b.co", false)).toBe("We'll email you when your invite is ready.");
+  it("is true for a first sign-up and a repeat one: names the address, claims no email sent", () => {
+    expect(joinedBody("a@b.co")).toBe("We'll email a@b.co when your invite is ready.");
+    expect(joinedBody("a@b.co")).not.toMatch(/sent|welcome/i);
   });
 });
 
-describe("joinedBody for someone already on the list (LOU-102 4.2)", () => {
-  it("never promises a welcome email, whatever Loops answered", () => {
-    expect(joinedBody("a@b.co", true, true)).toBe("You'd already joined. We'll email you when your invite is ready.");
-    expect(joinedBody("a@b.co", false, true)).toBe("You'd already joined. We'll email you when your invite is ready.");
+describe("joinedBody for someone the server says is already on the list (409, LOU-102 4.2)", () => {
+  it("says so, and promises no welcome email", () => {
+    expect(joinedBody("a@b.co", true)).toBe("You'd already joined. We'll email a@b.co when your invite is ready.");
   });
 });

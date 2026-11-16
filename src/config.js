@@ -7,8 +7,8 @@ export const SUPABASE_URL = "https://dxrmrfaptbhzyegbbmnz.supabase.co";
 // and Loops sends the welcome email. The form ID is not a secret: all it can do
 // is add someone to that list. (The server sync, LOU-96, backfills earlier
 // signups and catches any this misses.)
-// WELCOME_EMAIL_LIVE is the off switch: false skips Loops and keeps the
-// "We'll email you when your invite is ready" line.
+// WELCOME_EMAIL_LIVE is the off switch: false skips Loops. The card's line is
+// the same either way.
 export const WELCOME_EMAIL_LIVE = true;
 export const LOOPS_FORM_URL = "https://app.loops.so/api/newsletter-form/cmwb6vqci006n0j0d9fl670vn";
 export const LOOPS_LIST_ID = "cmwb7tp127bfc0jzggi1gb7kp";

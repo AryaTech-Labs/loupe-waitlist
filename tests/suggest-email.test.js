@@ -82,10 +82,7 @@ describe("suggestEmail leaves real addresses alone", () => {
 });
 
 describe("joinedBody", () => {
-  it("names the welcome email once it's live", () => {
-    expect(joinedBody("name@gmail.com", true)).toBe("We've sent a welcome email to name@gmail.com.");
-  });
-  it("keeps the invite line until then", () => {
-    expect(joinedBody("name@gmail.com", false)).toBe("We'll email you when your invite is ready.");
+  it("names the address, so a typo shows", () => {
+    expect(joinedBody("name@gmail.com")).toBe("We'll email name@gmail.com when your invite is ready.");
   });
 });
