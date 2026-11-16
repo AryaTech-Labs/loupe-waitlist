@@ -1,7 +1,15 @@
-import { LOOPS_FORM_URL, LOOPS_LIST_ID, SUPABASE_ANON_KEY, SUPABASE_URL, WELCOME_EMAIL_LIVE } from "./config.js";
+import {
+  LOOPS_FORM_URL,
+  LOOPS_LIST_ID,
+  REF_COLUMN_LIVE,
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+  WELCOME_EMAIL_LIVE,
+} from "./config.js";
 import {
   addToMailingList,
   buildRow,
+  currentRef,
   failureMessage,
   isValidEmail,
   joinedBody,
@@ -12,6 +20,16 @@ import {
 } from "./waitlist.js";
 import { startDial, startStripes } from "./dial.js";
 import { keepFormAboveKeyboard } from "./keyboard.js";
+
+// LOU-103: the ad or post that sent this visitor, kept for the session.
+// Reading sessionStorage itself can throw (blocked storage).
+let session = null;
+try {
+  session = window.sessionStorage;
+} catch {
+  session = null;
+}
+const ref = currentRef(location.search, session);
 
 const form = document.querySelector("[data-testid='waitlist.form']");
 const email = form.querySelector("#email");
@@ -105,7 +123,7 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (submit.disabled) return;
   clearError();
-  const row = buildRow({ email: email.value, collects: collects.value });
+  const row = buildRow({ email: email.value, collects: collects.value, ref }, { refLive: REF_COLUMN_LIVE });
   // Bots fill every field; people never see this one. Look like it worked.
   if (honeypot.value) return showJoined(row.email);
   const problem = validate(row);
